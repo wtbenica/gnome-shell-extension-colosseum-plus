@@ -13,46 +13,27 @@ if [[ ! "$WORK_DIR" || ! -d "$WORK_DIR" ]]; then
   exit 1
 fi
 
-if [[ $1 = "45" ]]; then
-	cp -r colosseum@sereneblue/* $WORK_DIR
-	cp -r versions/45/* $WORK_DIR
-	pushd $WORK_DIR
-	mv ui/prefs_adw.ui ui/prefs.ui
-	mv ui/league-row_adw.ui ui/league-row.ui
-	mv ui/tournament-row_adw.ui ui/tournament-row.ui
+cp -r colosseum@sereneblue/* $WORK_DIR
+cp -r versions/45/* $WORK_DIR
+pushd $WORK_DIR
+# No longer rename _adw UI files; keep the Adwaita/libadwaita variants as canonical
+# (prefs_adw.ui, league-row_adw.ui, tournament-row_adw.ui). This avoids
+# duplicate/ui-versioning at build time.
 
-	sed -i -e 's/var/export const/g' ./const.js
+sed -i -e 's/var/export const/g' ./const.js
 
-	# Compile GSettings schemas into the schemas directory so the zip includes
-	# a compiled gschemas.compiled (so users can install locally without
-	# needing system-wide schema installation).
-	if [[ -d "$WORK_DIR/schemas" ]]; then
-		if command -v glib-compile-schemas >/dev/null 2>&1; then
-			glib-compile-schemas "$WORK_DIR/schemas"
-		else
-			echo "Warning: glib-compile-schemas not found; schemas will not be compiled into the zip."
-		fi
+# Compile GSettings schemas into the schemas directory so the zip includes
+# a compiled gschemas.compiled (so users can install locally without
+# needing system-wide schema installation).
+if [[ -d "$WORK_DIR/schemas" ]]; then
+	if command -v glib-compile-schemas >/dev/null 2>&1; then
+		glib-compile-schemas "$WORK_DIR/schemas"
+	else
+		echo "Warning: glib-compile-schemas not found; schemas will not be compiled into the zip."
 	fi
-
-	zip -r ../colosseum_45.zip .
-	popd
-else 
-	cp -r colosseum@sereneblue/* $WORK_DIR
-	cp -r versions/pre45/* $WORK_DIR
-	pushd $WORK_DIR
-	rm ui/*_adw.ui
-
-	# Compile schemas for pre45 build too, if present
-	if [[ -d "$WORK_DIR/schemas" ]]; then
-		if command -v glib-compile-schemas >/dev/null 2>&1; then
-			glib-compile-schemas "$WORK_DIR/schemas"
-		else
-			echo "Warning: glib-compile-schemas not found; schemas will not be compiled into the zip."
-		fi
-	fi
-
-	zip -r ../colosseum_pre45.zip .
-	popd
 fi
+
+zip -r ../colosseum_45.zip .
+popd
 
 trap cleanup EXIT

@@ -231,7 +231,7 @@ const TeamRow = GObject.registerClass(
 const LeagueRow = GObject.registerClass(
   {
     GTypeName: "LeagueRow",
-    Template: EXT_PATH.replace("prefs.js", "ui/league-row.ui"),
+  Template: EXT_PATH.replace("prefs.js", "ui/league-row.ui"),
     InternalChildren: ["leagueSwitch"],
   },
   class Row extends Adw.ActionRow {
@@ -271,7 +271,7 @@ const LeagueRow = GObject.registerClass(
 const TournamentRow = GObject.registerClass(
   {
     GTypeName: "TournamentRow",
-    Template: EXT_PATH.replace("prefs.js", "ui/tournament-row.ui"),
+  Template: EXT_PATH.replace("prefs.js", "ui/tournament-row.ui"),
     InternalChildren: ["tournamentSwitch"],
   },
   class Row extends Adw.ActionRow {

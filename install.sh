@@ -19,18 +19,13 @@ if [[ ! -f "build.sh" || ! -d "colosseum@sereneblue" ]]; then
 fi
 
 # Build the extension (default to GNOME 45 if no argument provided)
-VERSION="${1:-45}"
-echo "Building extension for GNOME $VERSION..."
-./build.sh $VERSION
+echo "Building extension (GNOME 45)..."
+./build.sh 45
 
 # Extract to extensions directory
 echo "Extracting extension to $EXT_DIR..."
 mkdir -p "$EXT_DIR"
-if [[ "$VERSION" == "45" ]]; then
-    unzip -o colosseum_45.zip -d "$EXT_DIR/"
-else
-    unzip -o colosseum_pre45.zip -d "$EXT_DIR/"
-fi
+unzip -o colosseum_45.zip -d "$EXT_DIR/"
 
 # Compile local GSettings schemas in the extension directory (no sudo)
 if [[ -d "$EXT_DIR/schemas" ]]; then
