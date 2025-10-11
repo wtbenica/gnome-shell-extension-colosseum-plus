@@ -84,7 +84,7 @@ const Colosseum = GObject.registerClass({ GTypeName: 'Colosseum'},
 
             this._client = new Client.ColosseumClient(CONSTANTS, this._settings);
 
-            this._panelBoxLayout = new St.BoxLayout();
+            this._panelBoxLayout = new St.BoxLayout({ reactive: true, track_hover: true });
 
             this._icon = new St.Icon({
                 gicon : Gio.icon_new_for_string( EXTENSION.dir.get_path() + '/icon/colosseum-symbolic.svg' ),
@@ -99,8 +99,11 @@ const Colosseum = GObject.registerClass({ GTypeName: 'Colosseum'},
             this._panelBoxLayout.add(this._icon);
             this._panelBoxLayout.add(this._menuText);
 
-            this.hide();
             this.add_child(this._panelBoxLayout);
+            // Make the panel button visible by default so the extension icon/menu
+            // is always present in the top bar even when there are no current games.
+            // Show after children are added so event handling is set up correctly.
+            this.show();
 
             this._update();
         }
@@ -286,6 +289,31 @@ const Colosseum = GObject.registerClass({ GTypeName: 'Colosseum'},
                 menus.unshift(baseMenuItem);
             }
 
+            // Note: older pre45 versions don't fetch next games in this file by
+            // default; if next-games preference exists in this release add a
+            // placeholder so "Next Games" is always available. The client
+            // in this branch may live in a separate file; attempt to call its
+            // API if present.
+            if (this._client && this._client.isShowNextGamesEnabled && this._client.isShowNextGamesEnabled()) {
+                // If the client provides next games on this branch, ensure
+                // there is at least a placeholder when none are found.
+                // (This code keeps backward compatibility.)
+                if (!this._nextGames || this._nextGames.length === 0) {
+                    let submenu = new PopupMenu.PopupSubMenuMenuItem("Next Games");
+                    submenu.add_style_class_name('scoreBoardPanel');
+                    submenu.connect('activate', (submenu) => {
+                        submenu.setSubmenuShown(!submenu.submenuShown);
+                        return true;
+                    });
+
+                    let baseMenuItem = new PopupMenu.PopupBaseMenuItem({ hover: false, activate: false });
+                    let placeholder = new St.Label({ text: "No upcoming games", y_align: Clutter.ActorAlign.CENTER });
+                    baseMenuItem.add_actor(placeholder);
+                    submenu.menu.addMenuItem(baseMenuItem);
+                    menus.push(submenu);
+                }
+            }
+
             return menus;
         }
 
@@ -345,7 +373,9 @@ const Colosseum = GObject.registerClass({ GTypeName: 'Colosseum'},
                 this._icon.show();
 
                 if (totalGames === 0) {
-                    this.hide();
+                    // Always show the extension, even when no games are available
+                    this._panelBoxLayout.show();
+                    this.show();
                 } else if (remainingGames === 0) {
                     this._panelBoxLayout.show();
                     this.show();

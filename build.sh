@@ -22,6 +22,18 @@ if [[ $1 = "45" ]]; then
 	mv ui/tournament-row_adw.ui ui/tournament-row.ui
 
 	sed -i -e 's/var/export const/g' ./const.js
+
+	# Compile GSettings schemas into the schemas directory so the zip includes
+	# a compiled gschemas.compiled (so users can install locally without
+	# needing system-wide schema installation).
+	if [[ -d "$WORK_DIR/schemas" ]]; then
+		if command -v glib-compile-schemas >/dev/null 2>&1; then
+			glib-compile-schemas "$WORK_DIR/schemas"
+		else
+			echo "Warning: glib-compile-schemas not found; schemas will not be compiled into the zip."
+		fi
+	fi
+
 	zip -r ../colosseum_45.zip .
 	popd
 else 
@@ -29,6 +41,16 @@ else
 	cp -r versions/pre45/* $WORK_DIR
 	pushd $WORK_DIR
 	rm ui/*_adw.ui
+
+	# Compile schemas for pre45 build too, if present
+	if [[ -d "$WORK_DIR/schemas" ]]; then
+		if command -v glib-compile-schemas >/dev/null 2>&1; then
+			glib-compile-schemas "$WORK_DIR/schemas"
+		else
+			echo "Warning: glib-compile-schemas not found; schemas will not be compiled into the zip."
+		fi
+	fi
+
 	zip -r ../colosseum_pre45.zip .
 	popd
 fi

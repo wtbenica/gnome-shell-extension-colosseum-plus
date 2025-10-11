@@ -23,6 +23,22 @@ $ git clone https://github.com/sereneblue/gnome-shell-extension-colosseum.git
 $ cd gnome-shell-extension-colosseum
 ```
 
+#### Quick Install (Recommended)
+
+For a complete installation including GSettings schema setup:
+
+GNOME 45+:
+```
+$ ./install.sh 45
+```
+
+GNOME 40 - 44:
+```
+$ ./install.sh
+```
+
+#### Manual Install
+
 GNOME 45+:
 ```
 $ ./build.sh 45
@@ -36,6 +52,12 @@ $ ./build.sh
 Extract the contents of the newly created zip file into:
 ```
 ~/.local/share/gnome-shell/extensions/colosseum@sereneblue
+```
+
+**Important**: If using manual install, you must also install the GSettings schema system-wide:
+```
+$ sudo cp ~/.local/share/gnome-shell/extensions/colosseum@sereneblue/schemas/org.gnome.shell.extensions.colosseum.gschema.xml /usr/share/glib-2.0/schemas/
+$ sudo glib-compile-schemas /usr/share/glib-2.0/schemas/
 ```
 
 # Configuration
