@@ -378,7 +378,8 @@ export default class ColosseumClient {
     event.link = gameLink ? gameLink.href : null;
     event.isComplete = evt.status.type.completed;
     event.home = {};
-    event.home.id = home.id;
+  // Normalize ids to strings so they compare reliably with stored prefs
+  event.home.id = String(home.id);
     event.home.team = home.team.shortDisplayName;
     event.home.teamAbbr = home.team.abbreviation;
     event.home.score = home.score;
@@ -387,7 +388,7 @@ export default class ColosseumClient {
       "winner" in home ? (home.winner === false ? true : false) : false;
 
     event.away = {};
-    event.away.id = away.id;
+  event.away.id = String(away.id);
     event.away.team = away.team.shortDisplayName;
     event.away.teamAbbr = away.team.abbreviation;
     event.away.score = away.score;
@@ -438,6 +439,12 @@ export default class ColosseumClient {
       event.home.score = event.isComplete ? home.score : "";
       event.away.score = event.isComplete ? away.score : "";
       event.meta = evt.status.type.shortDetail;
+    }
+    // Preserve the original event date as a timestamp for sorting later
+    try {
+      event.timestamp = new Date(evt.date).getTime();
+    } catch (e) {
+      event.timestamp = Date.now();
     }
 
     return event;

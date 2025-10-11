@@ -21,7 +21,7 @@ const GameLink = GObject.registerClass(
     _init(link = "") {
       super._init({
         reactive: true,
-        style_class: "shell-link",
+        style_class: "shell-link meta",
         y_expand: true,
         x_align: Clutter.ActorAlign.END,
         y_align: Clutter.ActorAlign.CENTER,
@@ -96,7 +96,8 @@ const Colosseum = GObject.registerClass(
       this._timeout = null;
       this._settings = null;
 
-  this._panelBoxLayout = new St.BoxLayout({ reactive: true, track_hover: true });
+  // Make the panel box non-reactive so the top-bar doesn't light up on hover
+  this._panelBoxLayout = new St.BoxLayout({ reactive: false, track_hover: false });
 
       this._icon = new St.Icon({
         gicon: Gio.icon_new_for_string(
@@ -268,7 +269,24 @@ const Colosseum = GObject.registerClass(
 
     _createMenu() {
       let menus = [];
+      // We'll flatten all games into a single chronological list and then
+      // render them grouped by date. This includes current games (this._scores)
+      // and next games (this._nextGames) when enabled.
 
+      const allGames = [];
+
+      // Helper to push games with league and followed info
+      const pushGames = (leagueName, games) => {
+        const followedIds = this._client.getFollowedTeams(leagueName);
+        for (let g of games) {
+          // mark whether each team is followed
+          g._league = leagueName;
+          g._homeFollowed = followedIds.indexOf(String(g.home.id)) >= 0;
+          g._awayFollowed = followedIds.indexOf(String(g.away.id)) >= 0;
+          allGames.push(g);
+        }
+      };
+      // Build compact grid for single-game leagues (kept from previous layout)
       const HAS_COMPACT =
         this._isCompactMode() &&
         this._scores.filter((s) => s.games.length === 1).length > 0;
@@ -287,6 +305,7 @@ const Colosseum = GObject.registerClass(
 
       let offset = 0;
 
+      // Respect compact mode by collecting single-game leagues into compactGrid
       for (let i = 0; i < this._scores.length; i++) {
         if (HAS_COMPACT && this._scores[i].games.length === 1) {
           offset = this._addGamesToGrid(
@@ -296,108 +315,19 @@ const Colosseum = GObject.registerClass(
             this._scores[i].league,
           );
         } else {
-          let baseMenuItem = new PopupMenu.PopupBaseMenuItem({
-            hover: false,
-            activate: false,
-          });
-
-          let submenu = new PopupMenu.PopupSubMenuMenuItem(
-            this._scores[i].league,
-          );
-          submenu.add_style_class_name("scoreBoardPanel");
-
-          // Prevent submenu from closing parent menu when clicked
-          submenu.connect('activate', (submenu) => {
-            submenu.setSubmenuShown(!submenu.submenuShown);
-            return true; // Prevent default behavior
-          });
-
-          let grid = new Clutter.GridLayout();
-          grid.set_row_homogeneous(false);
-          grid.set_orientation(Clutter.Orientation.VERTICAL);
-
-          let g = new St.Widget({
-            style_class: "scoreboard",
-            can_focus: false,
-            track_hover: false,
-            reactive: false,
-            layout_manager: grid,
-          });
-
-          this._addGamesToGrid(grid, this._scores[i].games);
-
-          baseMenuItem.add_child(g);
-          submenu.menu.addMenuItem(baseMenuItem);
-          menus.push(submenu);
+          // For non-compact rendering, just collect games to be flattened
+          pushGames(this._scores[i].league, this._scores[i].games);
         }
       }
 
-      // Add next games section if the preference is enabled. If there are no
-      // upcoming games, add a placeholder submenu so "Next Games" is always
-      // available from the menu.
+      // Include upcoming games (flatten) if enabled
       if (this._client && this._client.isShowNextGamesEnabled && this._client.isShowNextGamesEnabled()) {
-        if (this._nextGames.length > 0) {
-          for (let i = 0; i < this._nextGames.length; i++) {
-            let baseMenuItem = new PopupMenu.PopupBaseMenuItem({
-              hover: false,
-              activate: false,
-            });
-
-            let submenu = new PopupMenu.PopupSubMenuMenuItem(
-              this._nextGames[i].league + " (Next)",
-            );
-            submenu.add_style_class_name("scoreBoardPanel");
-
-            // Prevent submenu from closing parent menu when clicked
-            submenu.connect('activate', (submenu) => {
-              submenu.setSubmenuShown(!submenu.submenuShown);
-              return true; // Prevent default behavior
-            });
-
-            let grid = new Clutter.GridLayout();
-            grid.set_row_homogeneous(false);
-            grid.set_orientation(Clutter.Orientation.VERTICAL);
-
-            let g = new St.Widget({
-              style_class: "scoreboard",
-              can_focus: false,
-              track_hover: false,
-              reactive: false,
-              layout_manager: grid,
-            });
-
-            this._addGamesToGrid(grid, this._nextGames[i].games);
-
-            baseMenuItem.add_child(g);
-            submenu.menu.addMenuItem(baseMenuItem);
-            menus.push(submenu);
-          }
-        } else {
-          // No upcoming games – provide a "Next Games" submenu with a single
-          // disabled/placeholder entry so the section is always visible.
-          let submenu = new PopupMenu.PopupSubMenuMenuItem("Next Games");
-          submenu.add_style_class_name("scoreBoardPanel");
-          submenu.connect('activate', (submenu) => {
-            submenu.setSubmenuShown(!submenu.submenuShown);
-            return true;
-          });
-
-          let baseMenuItem = new PopupMenu.PopupBaseMenuItem({
-            hover: false,
-            activate: false,
-          });
-
-          let placeholder = new St.Label({
-            text: "No upcoming games",
-            y_align: Clutter.ActorAlign.CENTER,
-          });
-
-          baseMenuItem.add_child(placeholder);
-          submenu.menu.addMenuItem(baseMenuItem);
-          menus.push(submenu);
+        for (let i = 0; i < this._nextGames.length; i++) {
+          pushGames(this._nextGames[i].league, this._nextGames[i].games);
         }
       }
 
+      // If compact content exists, add it first as before
       if (HAS_COMPACT) {
         const baseMenuItem = new PopupMenu.PopupBaseMenuItem({
           hover: false,
@@ -420,6 +350,137 @@ const Colosseum = GObject.registerClass(
         baseMenuItem.add_actor(scrollView);
         menus.unshift(baseMenuItem);
       }
+
+      // If no flattened games and no compact items, but Next Games preference is enabled,
+      // ensure a placeholder "Next Games" submenu exists so the user can always access it.
+      if (allGames.length === 0) {
+        if (this._client && this._client.isShowNextGamesEnabled && this._client.isShowNextGamesEnabled()) {
+          let submenu = new PopupMenu.PopupSubMenuMenuItem("Next Games");
+          submenu.add_style_class_name("scoreBoardPanel");
+          submenu.connect('activate', (submenu) => {
+            submenu.setSubmenuShown(!submenu.submenuShown);
+            return true;
+          });
+
+          let baseMenuItem = new PopupMenu.PopupBaseMenuItem({
+            hover: false,
+            activate: false,
+          });
+
+          let placeholder = new St.Label({
+            text: "No upcoming games",
+            y_align: Clutter.ActorAlign.CENTER,
+          });
+
+          baseMenuItem.add_child(placeholder);
+          submenu.menu.addMenuItem(baseMenuItem);
+          menus.push(submenu);
+        }
+
+        return menus;
+      }
+
+      // Sort games by timestamp (chronological)
+      allGames.sort((a, b) => a.timestamp - b.timestamp);
+
+      // Render games grouped by date using vertical BoxLayout of horizontal rows
+      let currentDay = null;
+
+      let groupBox = new St.BoxLayout({
+        style_class: "scoreboard",
+        vertical: true,
+        can_focus: false,
+        track_hover: false,
+        reactive: false,
+      });
+
+      for (let idx = 0; idx < allGames.length; idx++) {
+        const g = allGames[idx];
+        const day = new Date(g.timestamp).toDateString();
+
+        if (currentDay !== day) {
+          let dateLabel = new St.Label({
+            text: new Date(g.timestamp).toLocaleString(undefined, {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            }),
+            style_class: "date-header",
+            y_align: Clutter.ActorAlign.CENTER,
+            x_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+          });
+          let dateBox = new St.BoxLayout({ vertical: false, style_class: "date-box" });
+          // ensure the date header spans the full menu width so it's truly centered
+          dateBox.set_width(295);
+          dateBox.add_child(dateLabel);
+          groupBox.add_child(dateBox);
+          currentDay = day;
+        }
+
+        // Home row (horizontal)
+        let homeRow = new St.BoxLayout({ vertical: false, style_class: "score-row" });
+
+        let homeSuffix = g.home.isWinner ? "--winner" : g.home.isLoser ? "--loser" : "";
+        let awaySuffix = g.away.isWinner ? "--winner" : g.away.isLoser ? "--loser" : "";
+
+        let homeLabel = new St.Label({
+          text: g.home.team,
+          style_class: "team" + homeSuffix + (g._homeFollowed ? " team--followed" : ""),
+          y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        let homeScore = new St.Label({
+          text: g.home.score,
+          style_class: "score" + homeSuffix,
+          y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        let gameMeta = new St.Label({
+          text: g.meta,
+          style_class: "meta",
+          y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        homeRow.add_child(homeLabel);
+        homeRow.add_child(homeScore);
+        homeRow.add_child(gameMeta);
+        groupBox.add_child(homeRow);
+
+        // Away row
+        let awayRow = new St.BoxLayout({ vertical: false, style_class: "score-row" });
+
+        let awayLabel = new St.Label({
+          text: g.away.team,
+          style_class: "team" + awaySuffix + (g._awayFollowed ? " team--followed" : ""),
+          y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        let awayScore = new St.Label({
+          text: g.away.score,
+          style_class: "score" + awaySuffix,
+          y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        let gameLink = new GameLink(g.link);
+
+        awayRow.add_child(awayLabel);
+        awayRow.add_child(awayScore);
+        awayRow.add_child(gameLink);
+        groupBox.add_child(awayRow);
+
+        // Divider
+        let div = new St.Label({ text: "", style_class: "divider" });
+        let divBox = new St.BoxLayout({ vertical: false, style_class: "divider-box" });
+        divBox.add_child(div);
+        groupBox.add_child(divBox);
+      }
+  // force the group to the same width as other panels so columns align
+  groupBox.set_width(295);
+
+  const baseMenuItem = new PopupMenu.PopupBaseMenuItem({ hover: false, activate: false });
+  baseMenuItem.add_child(groupBox);
+      menus.push(baseMenuItem);
 
       return menus;
     }
