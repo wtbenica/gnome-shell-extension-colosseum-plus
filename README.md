@@ -27,24 +27,12 @@ $ cd gnome-shell-extension-colosseum
 
 For a complete installation including GSettings schema setup:
 
-GNOME 45+:
-```
-$ ./install.sh 45
-```
-
-GNOME 40 - 44:
 ```
 $ ./install.sh
 ```
 
 #### Manual Install
 
-GNOME 45+:
-```
-$ ./build.sh 45
-```
-
-GNOME 40 - 44:
 ```
 $ ./build.sh
 ```

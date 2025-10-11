@@ -18,9 +18,9 @@ if [[ ! -f "build.sh" || ! -d "colosseum@sereneblue" ]]; then
     exit 1
 fi
 
-# Build the extension (default to GNOME 45 if no argument provided)
+# Build the extension (default to GNOME 45)
 echo "Building extension (GNOME 45)..."
-./build.sh 45
+./build.sh
 
 # Extract to extensions directory
 echo "Extracting extension to $EXT_DIR..."
