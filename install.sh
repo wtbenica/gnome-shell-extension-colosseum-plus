@@ -13,7 +13,7 @@ SCHEMA_FILE="org.gnome.shell.extensions.colosseum.gschema.xml"
 echo "Installing Colosseum GNOME Extension..."
 
 # Check if we're in the right directory
-if [[ ! -f "build.sh" || ! -d "colosseum@sereneblue" ]]; then
+if [[ ! -f "build.sh" || ! -d "src" ]]; then
     echo "Error: Please run this script from the extension root directory"
     exit 1
 fi

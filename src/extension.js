@@ -345,9 +345,9 @@ const Colosseum = GObject.registerClass(
           y_expand: true,
         });
 
-        box.add(compactWidget);
-        scrollView.add_actor(box);
-        baseMenuItem.add_actor(scrollView);
+        box.add_child(compactWidget);
+        scrollView.add_child(box);
+        baseMenuItem.add_child(scrollView);
         menus.unshift(baseMenuItem);
       }
 
@@ -624,7 +624,9 @@ export default class ColosseumExtension extends Extension {
     this.scores.setSettings(
       this.getSettings("org.gnome.shell.extensions.colosseum"),
     );
-    this.scores._update();
+    this.scores._update().catch(error => {
+      console.error('Colosseum extension: Failed to update scores:', error);
+    });
 
     Main.panel.addToStatusArea(
       "colosseum",
