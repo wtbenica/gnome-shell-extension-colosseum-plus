@@ -92,18 +92,7 @@ export default class ColosseumClient {
         this.BASE_API_URL + "soccer/concacaf.leagues.cup/scoreboard",
       ],
       "Ligue 1": [this.BASE_API_URL + "soccer/fra.1/scoreboard"],
-      MLB: [this.BASE_API_URL + "baseball/mlb/scoreboard"],
       MLS: [this.BASE_API_URL + "soccer/usa.1/scoreboard"],
-      NBA: [this.BASE_API_URL + "basketball/nba/scoreboard"],
-      NCAAF: [this.BASE_API_URL + "football/college-football/scoreboard"],
-      NCAAM: [
-        this.BASE_API_URL + "basketball/mens-college-basketball/scoreboard",
-      ],
-      NCAAW: [
-        this.BASE_API_URL + "basketball/womens-college-basketball/scoreboard",
-      ],
-      NFL: [this.BASE_API_URL + "football/nfl/scoreboard"],
-      NHL: [this.BASE_API_URL + "hockey/nhl/scoreboard"],
       "Serie A": [this.BASE_API_URL + "soccer/ita.1/scoreboard"],
       "UEFA Champions League": [
         this.BASE_API_URL + "soccer/uefa.champions/scoreboard",
@@ -124,7 +113,6 @@ export default class ColosseumClient {
       "UEFA Women's Champions League": [
         this.BASE_API_URL + "soccer/uefa.wchampions/scoreboard",
       ],
-      WNBA: [this.BASE_API_URL + "basketball/wnba/scoreboard"],
     };
 
     this._CONSTANTS = constants;
