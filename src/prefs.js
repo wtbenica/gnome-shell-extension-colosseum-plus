@@ -19,6 +19,9 @@ class Preferences {
     this._builder.add_from_file(
       EXT_PATH.replace("prefs.js", "ui/prefs.ui").replace("file://", ""),
     );
+    this._builder.add_from_file(
+      EXT_PATH.replace("prefs.js", "ui/teams.ui").replace("file://", ""),
+    );
     this._leagues = this._builder.get_object("leagues");
     this._tournaments = this._builder.get_object("tournaments");
     this._prefsPage = this._builder.get_object("preferences_page");
