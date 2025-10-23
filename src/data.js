@@ -5,26 +5,26 @@ import Gio from "gi://Gio";
 import { CacheManager } from "./cache_manager.js";
 import { loadEnv } from "./env_loader.js";
 import { SportradarClient } from "./sportradar_client.js";
-import { gjsLogger } from "./logger_gjs.js";
+import { logInfo, logErr } from "./logging/error_utils.js";
 
 const env = loadEnv();
 const SPORT_RADAR_KEY = env.SPORT_RADAR_KEY;
 
 class DataLoaderClass {
   constructor() {
-    gjsLogger.log('DataLoader: Constructor called');
+    logInfo('DataLoader: Constructor called');
     this.cacheManager = new CacheManager();
     this.sportradarClient = new SportradarClient(SPORT_RADAR_KEY);
-    gjsLogger.log('DataLoader: Constructor complete');
+    logInfo('DataLoader: Constructor complete');
   }
 
   async fetchCompetitions() {
-    gjsLogger.log('DataLoader: Fetching competitions');
+    logInfo('DataLoader: Fetching competitions');
     
     // Check cache first
     const cachedCompetitions = this.cacheManager.getRawCompetitions();
     if (cachedCompetitions.length > 0 && !this.cacheManager.shouldUpdate()) {
-      gjsLogger.log('DataLoader: Returning cached competitions:', cachedCompetitions.length);
+      logInfo('DataLoader: Returning cached competitions:', cachedCompetitions.length);
       return cachedCompetitions;
     }
 
@@ -33,18 +33,18 @@ class DataLoaderClass {
     if (competitions.length > 0) {
       // Update cache with competitions and empty teams for now
       this.cacheManager.save([], competitions, []);
-      gjsLogger.log('DataLoader: Fetched and cached competitions:', competitions.length);
+      logInfo('DataLoader: Fetched and cached competitions:', competitions.length);
     }
     return competitions;
   }
 
   async fetchCompetitionInfo(competitionId) {
-    gjsLogger.log('DataLoader: Fetching competition info for', competitionId);
+    logInfo('DataLoader: Fetching competition info for', competitionId);
     
     // Check cache first
     const cachedTeams = this.cacheManager.getTeams(competitionId);
     if (cachedTeams.length > 0 && !this.cacheManager.shouldUpdate()) {
-      gjsLogger.log('DataLoader: Returning cached teams for', competitionId, ':', cachedTeams.length);
+      logInfo('DataLoader: Returning cached teams for', competitionId, ':', cachedTeams.length);
       return cachedTeams;
     }
 
@@ -58,11 +58,11 @@ class DataLoaderClass {
       const currentTeams = this.cacheManager.data.teams || {};
       currentTeams[competitionId] = teams;
       this.cacheManager.save(currentLeagues, currentTeams, currentCompetitions);
-      gjsLogger.log('DataLoader: Fetched and cached teams for', competitionId, ':', teams.length);
+      logInfo('DataLoader: Fetched and cached teams for', competitionId, ':', teams.length);
       return teams;
     }
     
-    gjsLogger.log('DataLoader: Failed to fetch competition info for', competitionId);
+    logInfo('DataLoader: Failed to fetch competition info for', competitionId);
     return [];
   }
 

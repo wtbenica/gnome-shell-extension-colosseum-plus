@@ -1,7 +1,7 @@
 import GLib from "gi://GLib";
 import Soup from "gi://Soup";
 
-import { gjsLogger } from "./logger_gjs.js";
+import { logInfo, logErr } from "./logging/error_utils.js";
 
 /**
  * Sportradar API client for soccer data
@@ -18,7 +18,7 @@ export class SportradarClient {
    */
   async request(endpoint) {
     if (!this.apiKey) {
-      gjsLogger.log("SportradarClient: API key missing");
+      logInfo("SportradarClient: API key missing");
       return null;
     }
 
@@ -37,21 +37,21 @@ export class SportradarClient {
             const data = session.send_and_read_finish(res);
             if (data) {
               const text = this._decoder.decode(data.toArray());
-              gjsLogger.log("SportradarClient: Response for", endpoint, "- length:", text.length);
+              logInfo("SportradarClient: Response for", endpoint, "- length:", text.length);
               
               try {
                 const json = JSON.parse(text);
                 resolve(json);
               } catch (e) {
-                gjsLogger.logError(e, "SportradarClient: Failed to parse response");
+                logErr(e, "SportradarClient: Failed to parse response");
                 resolve(null);
               }
             } else {
-              gjsLogger.log("SportradarClient: No response from endpoint:", endpoint);
+              logInfo("SportradarClient: No response from endpoint:", endpoint);
               resolve(null);
             }
           } catch (error) {
-            gjsLogger.logError(error, "SportradarClient: Error in request for " + endpoint);
+            logErr(error, "SportradarClient: Error in request for " + endpoint);
             resolve(null);
           }
         }
@@ -63,15 +63,15 @@ export class SportradarClient {
    * Fetch all competitions
    */
   async getCompetitions(locale = "en") {
-    gjsLogger.log("SportradarClient: Fetching competitions");
+    logInfo("SportradarClient: Fetching competitions");
     const response = await this.request(`${locale}/competitions.json`);
     
     if (response && Array.isArray(response.competitions)) {
-      gjsLogger.log("SportradarClient: Got", response.competitions.length, "competitions");
+      logInfo("SportradarClient: Got", response.competitions.length, "competitions");
       return response.competitions;
     }
     
-    gjsLogger.log("SportradarClient: Failed to fetch competitions");
+    logInfo("SportradarClient: Failed to fetch competitions");
     return [];
   }
 
@@ -79,15 +79,15 @@ export class SportradarClient {
    * Fetch competition info including teams
    */
   async getCompetitionInfo(competitionId, locale = "en") {
-    gjsLogger.log("SportradarClient: Fetching competition info for", competitionId);
+    logInfo("SportradarClient: Fetching competition info for", competitionId);
     const response = await this.request(`${locale}/competitions/${competitionId}/info.json`);
     
     if (response && response.season && response.season.competitors) {
-      gjsLogger.log("SportradarClient: Got", response.season.competitors.length, "teams for", competitionId);
+      logInfo("SportradarClient: Got", response.season.competitors.length, "teams for", competitionId);
       return response;
     }
     
-    gjsLogger.log("SportradarClient: Failed to fetch competition info for", competitionId);
+    logInfo("SportradarClient: Failed to fetch competition info for", competitionId);
     return null;
   }
 

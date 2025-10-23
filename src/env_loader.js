@@ -1,7 +1,7 @@
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 
-import { gjsLogger } from "./logger_gjs.js";
+import { logInfo, logErr } from "./logging/error_utils.js";
 
 /**
  * Load environment variables from .env file
@@ -17,14 +17,14 @@ export function loadEnv() {
   }
 
   if (!envFile.query_exists(null)) {
-    gjsLogger.log('EnvLoader: No .env file found. API key will not be available.');
+    logInfo('EnvLoader: No .env file found. API key will not be available.');
     return {};
   }
 
   try {
     const [success, contents] = envFile.load_contents(null);
     if (!success) {
-      gjsLogger.log('EnvLoader: Failed to read .env file contents');
+      logInfo('EnvLoader: Failed to read .env file contents');
       return {};
     }
     
@@ -43,10 +43,10 @@ export function loadEnv() {
       }
     });
     
-    gjsLogger.log('EnvLoader: Environment loaded successfully');
+    logInfo('EnvLoader: Environment loaded successfully');
     return env;
   } catch (error) {
-    gjsLogger.logError(error, 'EnvLoader: Failed to load .env file');
+    logErr(error, 'EnvLoader: Failed to load .env file');
     return {};
   }
 }

@@ -4,42 +4,43 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { getConstants, PREF_POSITION_TOPBAR } from "./const.js";
 import { Colosseum } from "./widgets/colosseum.js";
 import DataLoader from "./data.js";
+import { logInfo, logErr } from "./logging/error_utils.js";
 
 export default class ColosseumExtension extends Extension {
   async enable() {
-    console.log('Colosseum extension: Starting enable...');
+    logInfo('Colosseum extension: Starting enable...');
     
     // Check if we should update data (only on Mondays if cache is stale)
     try {
       await this.checkForDataUpdates();
-      console.log('Colosseum extension: Data updates checked');
+      logInfo('Colosseum extension: Data updates checked');
     } catch (error) {
-      console.error('Colosseum extension: Failed to check data updates:', error);
+      logErr(error, 'Colosseum extension: Failed to check data updates');
     }
 
     // Load dynamic constants first
     let constants;
     try {
       constants = await getConstants();
-      console.log('Colosseum extension: Constants loaded');
+      logInfo('Colosseum extension: Constants loaded');
     } catch (error) {
-      console.error('Colosseum extension: Failed to load dynamic constants:', error);
+      logErr(error, 'Colosseum extension: Failed to load dynamic constants');
       constants = {}; // fallback
     }
 
-    console.log('Colosseum extension: Creating Colosseum widget...');
+    logInfo('Colosseum extension: Creating Colosseum widget...');
     this.scores = new Colosseum();
-    console.log('Colosseum extension: Setting settings...');
+    logInfo('Colosseum extension: Setting settings...');
     this.scores.setSettings(
       this.getSettings("org.gnome.shell.extensions.colosseum"),
       constants,
     );
-    console.log('Colosseum extension: Calling initial update...');
+    logInfo('Colosseum extension: Calling initial update...');
     this.scores._update().catch(error => {
-      console.error('Colosseum extension: Failed to update scores:', error);
+      logErr(error, 'Colosseum extension: Failed to update scores');
     });
 
-    console.log('Colosseum extension: Adding to status area...');
+    logInfo('Colosseum extension: Adding to status area...');
     Main.panel.addToStatusArea(
       "colosseum",
       this.scores,
@@ -48,19 +49,19 @@ export default class ColosseumExtension extends Extension {
         ? "left"
         : "right",
     );
-    console.log('Colosseum extension: Enable complete!');
+    logInfo('Colosseum extension: Enable complete!');
   }
 
   async checkForDataUpdates() {
-    console.log('Colosseum extension: checkForDataUpdates called');
+    logInfo('Colosseum extension: checkForDataUpdates called');
     try {
       // This will trigger cache loading and potential API calls
-      console.log('Colosseum extension: About to call DataLoader.fetchCompetitions()');
+      logInfo('Colosseum extension: About to call DataLoader.fetchCompetitions()');
       const result = await DataLoader.fetchCompetitions();
-      console.log('Colosseum extension: DataLoader.fetchCompetitions() returned:', result);
+      logInfo('Colosseum extension: DataLoader.fetchCompetitions() returned:', result);
     } catch (error) {
-      console.error('Colosseum extension: Failed to check for data updates:', error);
-      console.error('Colosseum extension: Error stack:', error.stack);
+      logErr(error, 'Colosseum extension: Failed to check for data updates');
+      logErr(error, 'Colosseum extension: Error stack');
     }
   }
 

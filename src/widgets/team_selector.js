@@ -3,7 +3,7 @@ import GObject from "gi://GObject";
 import St from "gi://St";
 import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
 
-import { gjsLogger } from "../logger_gjs.js";
+import { logInfo, logErr } from "../logging/error_utils.js";
 
 export const TeamSelectorDialog = GObject.registerClass(
   class TeamSelectorDialog extends ModalDialog.ModalDialog {
@@ -52,7 +52,7 @@ export const TeamSelectorDialog = GObject.registerClass(
 
     async _populateTeamSelector() {
       try {
-        gjsLogger.log('TeamSelector: Starting to populate team selector');
+        logInfo('TeamSelector: Starting to populate team selector');
         this._contentBox.destroy_all_children();
         
         // Add search bar
@@ -65,11 +65,11 @@ export const TeamSelectorDialog = GObject.registerClass(
 
         // Fetch competitions from Sportradar
         const DataLoader = (await import('../data.js')).default;
-        gjsLogger.log('TeamSelector: Fetching competitions from DataLoader');
+        logInfo('TeamSelector: Fetching competitions from DataLoader');
         const competitions = await DataLoader.fetchCompetitions();
         
         if (!competitions || competitions.length === 0) {
-          gjsLogger.log('TeamSelector: No competitions available');
+          logInfo('TeamSelector: No competitions available');
           let noLeaguesLabel = new St.Label({
             text: 'No competitions available. Data may still be loading.',
             style_class: 'no-teams-label',
@@ -78,7 +78,7 @@ export const TeamSelectorDialog = GObject.registerClass(
           return;
         }
 
-        gjsLogger.log('TeamSelector: Got', competitions.length, 'competitions');
+        logInfo('TeamSelector: Got', competitions.length, 'competitions');
 
         // Group competitions by country
         let countryMap = {};
@@ -88,7 +88,7 @@ export const TeamSelectorDialog = GObject.registerClass(
           countryMap[country].push(comp);
         }
 
-        gjsLogger.log('TeamSelector: Grouped into', Object.keys(countryMap).length, 'countries');
+        logInfo('TeamSelector: Grouped into', Object.keys(countryMap).length, 'countries');
 
         // Render countries and competitions
         let countrySections = {};
@@ -108,6 +108,7 @@ export const TeamSelectorDialog = GObject.registerClass(
           });
           
           for (const comp of countryMap[country]) {
+            logInfo('TeamSelector: Adding comp', comp.name || 'undefined', 'to', country);
             let compBox = new St.BoxLayout({
               style_class: 'team-selector-comp-row',
               vertical: true,
@@ -132,7 +133,7 @@ export const TeamSelectorDialog = GObject.registerClass(
             // Expand competition to show teams
             compButton.connect('clicked', async () => {
               try {
-                gjsLogger.log('TeamSelector: Competition clicked:', comp.name, comp.id);
+                logInfo('TeamSelector: Competition clicked:', comp.name, comp.id);
                 
                 if (teamsContainer.get_children().length === 0) {
                   // Show loading indicator
@@ -141,16 +142,16 @@ export const TeamSelectorDialog = GObject.registerClass(
                     style_class: 'team-selector-loading',
                   });
                   teamsContainer.add_child(loadingLabel);
-                  teamsContainer.set_visible(true);
+                  teamsContainer.visible = true;
                   
                   // Fetch teams from Sportradar
-                  gjsLogger.log('TeamSelector: Fetching competition info for', comp.id);
+                  logInfo('TeamSelector: Fetching competition info for', comp.id);
                   const info = await DataLoader.fetchCompetitionInfo(comp.id);
                   
                   teamsContainer.destroy_all_children();
                   
                   if (info && info.season && info.season.competitors) {
-                    gjsLogger.log('TeamSelector: Got', info.season.competitors.length, 'teams for', comp.name);
+                    logInfo('TeamSelector: Got', info.season.competitors.length, 'teams for', comp.name);
                     
                     const teams = info.season.competitors;
                     const followedTeams = this._settings.get_strv('followed-teams');
@@ -186,12 +187,12 @@ export const TeamSelectorDialog = GObject.registerClass(
                           currentFollowed.splice(index, 1);
                           teamSwitch.remove_style_class_name('team-selector-switch-active');
                           teamSwitch.set_label('');
-                          gjsLogger.log('TeamSelector: Unfollowed team:', team.name);
+                          logInfo('TeamSelector: Unfollowed team:', team.name);
                         } else {
                           currentFollowed.push(teamId);
                           teamSwitch.add_style_class_name('team-selector-switch-active');
                           teamSwitch.set_label('✓');
-                          gjsLogger.log('TeamSelector: Followed team:', team.name);
+                          logInfo('TeamSelector: Followed team:', team.name);
                         }
                         
                         this._settings.set_strv('followed-teams', currentFollowed);
@@ -202,7 +203,7 @@ export const TeamSelectorDialog = GObject.registerClass(
                       teamsContainer.add_child(teamBox);
                     }
                   } else {
-                    gjsLogger.log('TeamSelector: No teams found for competition', comp.id);
+                    logInfo('TeamSelector: No teams found for competition', comp.id);
                     let errorLabel = new St.Label({
                       text: '  No teams found for this competition.',
                       style_class: 'no-teams-label',
@@ -211,17 +212,17 @@ export const TeamSelectorDialog = GObject.registerClass(
                   }
                 } else {
                   // Toggle visibility if already loaded
-                  teamsContainer.set_visible(!teamsContainer.get_visible());
+                  teamsContainer.visible = !teamsContainer.visible;
                 }
               } catch (error) {
-                gjsLogger.logError(error, 'TeamSelector: Failed to load teams for competition ' + comp.name);
+                logErr(error, 'TeamSelector: Failed to load teams for competition ' + comp.name);
                 teamsContainer.destroy_all_children();
                 let errorLabel = new St.Label({
                   text: '  Error loading teams: ' + error.message,
                   style_class: 'no-teams-label',
                 });
                 teamsContainer.add_child(errorLabel);
-                teamsContainer.set_visible(true);
+                teamsContainer.visible = true;
               }
             });
           }
@@ -231,18 +232,18 @@ export const TeamSelectorDialog = GObject.registerClass(
 
           // Toggle competitions visibility when country row is clicked
           countryButton.connect('clicked', () => {
-            gjsLogger.log('TeamSelector: Country clicked:', country);
-            const isVisible = compsContainer.get_visible();
-            compsContainer.set_visible(!isVisible);
+            logInfo('TeamSelector: Country clicked:', country);
+            const isVisible = compsContainer.visible;
+            logInfo('TeamSelector: compsContainer was visible:', isVisible, 'children count:', compsContainer.get_children().length);
+            compsContainer.visible = !isVisible;
             countryButton.label = isVisible ? `▶ ${country}` : `▼ ${country}`;
+            logInfo('TeamSelector: Set compsContainer visible to:', !isVisible);
+            this._contentBox.queue_relayout();
           });
         }
 
         // Search filter logic
-        searchEntry.clutter_text.connect('text-changed', () => {
-          const query = searchEntry.get_text().toLowerCase();
-          gjsLogger.log('TeamSelector: Search query:', query);
-          
+        this._filterItems = (query) => {
           for (const country of Object.keys(countrySections)) {
             const { countryButton, compsContainer } = countrySections[country];
             let matchCountry = country.toLowerCase().includes(query);
@@ -252,30 +253,40 @@ export const TeamSelectorDialog = GObject.registerClass(
               const compButton = compBox.get_children()[0];
               const compName = compButton.label.toLowerCase();
               const visible = compName.includes(query) || matchCountry;
-              compBox.set_visible(visible);
+              compBox.visible = visible;
               
               if (visible) matchComp = true;
               
               // Collapse teams when searching
               if (compBox.get_children().length > 1) {
-                compBox.get_children()[1].set_visible(false);
+                compBox.get_children()[1].visible = false;
               }
             });
             
             // Only show country if it or any of its competitions match
             const shouldShow = query === '' || matchCountry || matchComp;
-            countryButton.set_visible(shouldShow);
-            compsContainer.set_visible(shouldShow && (matchCountry || matchComp));
+            countryButton.visible = shouldShow;
+            compsContainer.visible = shouldShow && (matchCountry || matchComp);
             
             if (query !== '') {
               countryButton.label = `▶ ${country}`;
             }
           }
+          this._contentBox.queue_relayout();
+        };
+
+        searchEntry.clutter_text.connect('text-changed', () => {
+          const query = searchEntry.get_text().toLowerCase();
+          logInfo('TeamSelector: Search query:', query);
+          this._filterItems(query);
         });
         
-        gjsLogger.log('TeamSelector: Population complete');
+        // Initial filter with empty query to show all
+        this._filterItems('');
+        
+        logInfo('TeamSelector: Population complete');
       } catch (error) {
-        gjsLogger.logError(error, 'TeamSelector: Failed to populate team selector');
+        logErr(error, 'TeamSelector: Failed to populate team selector');
         this._contentBox.destroy_all_children();
         let errorLabel = new St.Label({
           text: 'Error loading teams: ' + error.message,

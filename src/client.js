@@ -1,6 +1,7 @@
 import GLib from "gi://GLib";
 import Soup from "gi://Soup";
 import Gio from "gi://Gio";
+import { logWarn, logErr } from "./logging/error_utils.js";
 
 const STATUS = {
   TBD: "0",
@@ -59,7 +60,7 @@ function loadEnv() {
   }
   
   if (!envFile.query_exists(null)) {
-    console.warn('Colosseum: No .env file found. API key will not be available.');
+    logWarn('Colosseum: No .env file found. API key will not be available.');
     return {};
   }
   
@@ -83,7 +84,7 @@ function loadEnv() {
     });
     return env;
   } catch (error) {
-    console.error('Colosseum: Failed to load .env file:', error);
+    logErr(error, 'Colosseum: Failed to load .env file');
     return {};
   }
 }

@@ -1,7 +1,7 @@
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 
-import { gjsLogger } from "./logger_gjs.js";
+import { logInfo, logErr } from "./logging/error_utils.js";
 
 const CACHE_FILE = GLib.get_user_cache_dir() + '/colosseum-data.json';
 const CACHE_DURATION_DAYS = 7;
@@ -19,36 +19,36 @@ export class CacheManager {
    * Load cache from disk
    */
   load() {
-    gjsLogger.log('CacheManager: Loading cache from', CACHE_FILE);
+    logInfo('CacheManager: Loading cache from', CACHE_FILE);
     
     try {
       const cacheFile = Gio.File.new_for_path(CACHE_FILE);
       
       if (cacheFile.query_exists(null)) {
-        gjsLogger.log('CacheManager: Cache file exists, loading...');
+        logInfo('CacheManager: Cache file exists, loading...');
         const [success, contents] = cacheFile.load_contents(null);
         
         if (success) {
           const text = this._decoder.decode(contents);
           const parsed = JSON.parse(text);
           
-          gjsLogger.log('CacheManager: Cache loaded -',
+          logInfo('CacheManager: Cache loaded -',
             'leagues:', parsed.leagues?.length || 0,
             'rawCompetitions:', parsed.rawCompetitions?.length || 0,
             'teams:', Object.keys(parsed.teams || {}).length);
           
           return parsed;
         } else {
-          gjsLogger.log('CacheManager: Failed to load cache file contents');
+          logInfo('CacheManager: Failed to load cache file contents');
         }
       } else {
-        gjsLogger.log('CacheManager: Cache file does not exist');
+        logInfo('CacheManager: Cache file does not exist');
       }
     } catch (error) {
-      gjsLogger.logError(error, 'CacheManager: Failed to load cache');
+      logErr(error, 'CacheManager: Failed to load cache');
     }
     
-    gjsLogger.log('CacheManager: Returning empty cache');
+    logInfo('CacheManager: Returning empty cache');
     return {
       lastUpdate: 0,
       leagues: [],
@@ -84,12 +84,12 @@ export class CacheManager {
       );
       
       if (!success) {
-        gjsLogger.log('CacheManager: Failed to save cache');
+        logInfo('CacheManager: Failed to save cache');
       } else {
-        gjsLogger.log('CacheManager: Cache saved successfully');
+        logInfo('CacheManager: Cache saved successfully');
       }
     } catch (error) {
-      gjsLogger.logError(error, 'CacheManager: Failed to save cache');
+      logErr(error, 'CacheManager: Failed to save cache');
     }
   }
 
