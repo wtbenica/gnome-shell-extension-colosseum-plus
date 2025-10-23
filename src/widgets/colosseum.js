@@ -54,8 +54,9 @@ export const Colosseum = GObject.registerClass(
       this.show();
     }
 
-    setSettings(settings) {
+    setSettings(settings, constants) {
       this._settings = settings;
+      this._constants = constants;
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_POSITION_TOPBAR,
         this._updatePositionInPanel.bind(this),
@@ -73,7 +74,7 @@ export const Colosseum = GObject.registerClass(
         this._update.bind(this),
       );
 
-      this._client = new ColosseumClient(CONSTANTS, this._settings);
+      this._client = new ColosseumClient(this._constants, this._settings);
     }
 
     _addGamesToGrid(grid, games, offset = 0, league = null) {
@@ -432,11 +433,12 @@ export const Colosseum = GObject.registerClass(
     _openTeamSelector() {
       try {
         console.log('Colosseum: Creating team selector dialog...');
-        const dialog = new TeamSelectorDialog(this._settings, CONSTANTS);
+        const dialog = new TeamSelectorDialog(this._settings);
         dialog.open();
         console.log('Colosseum: Team selector dialog opened');
       } catch (error) {
         console.error('Colosseum: Failed to open team selector:', error);
+        console.error('Colosseum: Error stack:', error.stack);
       }
     }
 

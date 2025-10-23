@@ -18,12 +18,13 @@ export default class ColosseumExtension extends Extension {
     }
 
     // Load dynamic constants first
+    let constants;
     try {
-      await getConstants();
+      constants = await getConstants();
       console.log('Colosseum extension: Constants loaded');
     } catch (error) {
       console.error('Colosseum extension: Failed to load dynamic constants:', error);
-      // Continue with static constants as fallback
+      constants = {}; // fallback
     }
 
     console.log('Colosseum extension: Creating Colosseum widget...');
@@ -31,6 +32,7 @@ export default class ColosseumExtension extends Extension {
     console.log('Colosseum extension: Setting settings...');
     this.scores.setSettings(
       this.getSettings("org.gnome.shell.extensions.colosseum"),
+      constants,
     );
     console.log('Colosseum extension: Calling initial update...');
     this.scores._update().catch(error => {
@@ -53,9 +55,9 @@ export default class ColosseumExtension extends Extension {
     console.log('Colosseum extension: checkForDataUpdates called');
     try {
       // This will trigger cache loading and potential API calls
-      console.log('Colosseum extension: About to call DataLoader.fetchLeagues()');
-      const result = await DataLoader.fetchLeagues();
-      console.log('Colosseum extension: DataLoader.fetchLeagues() returned:', result);
+      console.log('Colosseum extension: About to call DataLoader.fetchCompetitions()');
+      const result = await DataLoader.fetchCompetitions();
+      console.log('Colosseum extension: DataLoader.fetchCompetitions() returned:', result);
     } catch (error) {
       console.error('Colosseum extension: Failed to check for data updates:', error);
       console.error('Colosseum extension: Error stack:', error.stack);

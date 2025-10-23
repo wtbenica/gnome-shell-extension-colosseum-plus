@@ -3,14 +3,13 @@ import GObject from "gi://GObject";
 import St from "gi://St";
 import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
 
-import * as CONSTANTS from "../const.js";
+import { gjsLogger } from "../logger_gjs.js";
 
 export const TeamSelectorDialog = GObject.registerClass(
   class TeamSelectorDialog extends ModalDialog.ModalDialog {
-    _init(client, settings) {
+    _init(settings) {
       super._init({ styleClass: 'team-selector-dialog' });
 
-      this._client = client;
       this._settings = settings;
 
       // Dialog title
@@ -53,120 +52,230 @@ export const TeamSelectorDialog = GObject.registerClass(
 
     async _populateTeamSelector() {
       try {
-        console.log('TeamSelector: Loading constants...');
-        await CONSTANTS.getConstants();
-        
-        const leagues = Object.keys(CONSTANTS.SPORTS || {});
-        console.log('TeamSelector: Leagues available:', leagues);
-
+        gjsLogger.log('TeamSelector: Starting to populate team selector');
         this._contentBox.destroy_all_children();
+        
+        // Add search bar
+        let searchEntry = new St.Entry({
+          style_class: 'team-selector-search',
+          hint_text: 'Search country or league...',
+          x_expand: true,
+        });
+        this._contentBox.add_child(searchEntry);
 
-        if (leagues.length === 0) {
+        // Fetch competitions from Sportradar
+        const DataLoader = (await import('../data.js')).default;
+        gjsLogger.log('TeamSelector: Fetching competitions from DataLoader');
+        const competitions = await DataLoader.fetchCompetitions();
+        
+        if (!competitions || competitions.length === 0) {
+          gjsLogger.log('TeamSelector: No competitions available');
           let noLeaguesLabel = new St.Label({
-            text: 'No leagues available. Data may still be loading.',
+            text: 'No competitions available. Data may still be loading.',
             style_class: 'no-teams-label',
           });
           this._contentBox.add_child(noLeaguesLabel);
           return;
         }
 
-        const followedTeams = this._settings.get_strv('followed-teams');
-        console.log('TeamSelector: Currently followed teams:', followedTeams);
+        gjsLogger.log('TeamSelector: Got', competitions.length, 'competitions');
 
-        // Create a section for each league
-        for (const league of leagues) {
-          // League expander button
-          let leagueBox = new St.BoxLayout({
-            style_class: 'team-selector-league-box',
-            vertical: false,
-          });
+        // Group competitions by country
+        let countryMap = {};
+        for (const comp of competitions) {
+          const country = comp.category?.name || 'Other';
+          if (!countryMap[country]) countryMap[country] = [];
+          countryMap[country].push(comp);
+        }
 
-          let leagueButton = new St.Button({
-            style_class: 'team-selector-league-button',
+        gjsLogger.log('TeamSelector: Grouped into', Object.keys(countryMap).length, 'countries');
+
+        // Render countries and competitions
+        let countrySections = {};
+        for (const country of Object.keys(countryMap).sort()) {
+          let countryButton = new St.Button({
+            label: `▶ ${country}`,
+            style_class: 'team-selector-country-header',
             x_expand: true,
           });
+          this._contentBox.add_child(countryButton);
 
-          let leagueLabel = new St.Label({
-            text: `▶ ${CONSTANTS.DISPLAY_NAME[league] || league}`,
-            style_class: 'team-selector-league-header',
-          });
-
-          leagueButton.set_child(leagueLabel);
-          leagueBox.add_child(leagueButton);
-          this._contentBox.add_child(leagueBox);
-
-          // Teams container (initially hidden)
-          let teamsContainer = new St.BoxLayout({
-            style_class: 'team-selector-teams-container',
+          // Competitions container (initially hidden)
+          let compsContainer = new St.BoxLayout({
+            style_class: 'team-selector-comps-container',
             vertical: true,
             visible: false,
           });
-
-          const teams = CONSTANTS.SPORTS[league] || [];
-          console.log(`TeamSelector: Teams in ${league}:`, teams.length);
-
-          for (const team of teams) {
-            let teamBox = new St.BoxLayout({
-              style_class: 'team-selector-row',
-              vertical: false,
+          
+          for (const comp of countryMap[country]) {
+            let compBox = new St.BoxLayout({
+              style_class: 'team-selector-comp-row',
+              vertical: true,
             });
-
-            let teamLabel = new St.Label({
-              text: team.name,
-              style_class: 'team-selector-label',
+            
+            let compButton = new St.Button({
+              label: `  ${comp.name}`,
+              style_class: 'team-selector-comp-button',
               x_expand: true,
             });
+            compBox.add_child(compButton);
 
-            let teamSwitch = new St.Button({
-              style_class: followedTeams.includes(team.id.toString())
-                ? 'team-selector-switch team-selector-switch-active'
-                : 'team-selector-switch',
-              toggle_mode: true,
-              checked: followedTeams.includes(team.id.toString()),
-              label: followedTeams.includes(team.id.toString()) ? '✓' : '',
+            // Teams container (initially hidden)
+            let teamsContainer = new St.BoxLayout({
+              style_class: 'team-selector-teams-container',
+              vertical: true,
+              visible: false,
             });
+            compBox.add_child(teamsContainer);
+            compsContainer.add_child(compBox);
 
-            teamSwitch.connect('clicked', () => {
-              const currentFollowed = this._settings.get_strv('followed-teams');
-              const isFollowed = currentFollowed.includes(team.id.toString());
-              
-              if (isFollowed) {
-                const index = currentFollowed.indexOf(team.id.toString());
-                currentFollowed.splice(index, 1);
-                teamSwitch.remove_style_class_name('team-selector-switch-active');
-                teamSwitch.set_label('');
-              } else {
-                currentFollowed.push(team.id.toString());
-                teamSwitch.add_style_class_name('team-selector-switch-active');
-                teamSwitch.set_label('✓');
+            // Expand competition to show teams
+            compButton.connect('clicked', async () => {
+              try {
+                gjsLogger.log('TeamSelector: Competition clicked:', comp.name, comp.id);
+                
+                if (teamsContainer.get_children().length === 0) {
+                  // Show loading indicator
+                  let loadingLabel = new St.Label({
+                    text: '  Loading teams...',
+                    style_class: 'team-selector-loading',
+                  });
+                  teamsContainer.add_child(loadingLabel);
+                  teamsContainer.set_visible(true);
+                  
+                  // Fetch teams from Sportradar
+                  gjsLogger.log('TeamSelector: Fetching competition info for', comp.id);
+                  const info = await DataLoader.fetchCompetitionInfo(comp.id);
+                  
+                  teamsContainer.destroy_all_children();
+                  
+                  if (info && info.season && info.season.competitors) {
+                    gjsLogger.log('TeamSelector: Got', info.season.competitors.length, 'teams for', comp.name);
+                    
+                    const teams = info.season.competitors;
+                    const followedTeams = this._settings.get_strv('followed-teams');
+                    
+                    for (const team of teams) {
+                      let teamBox = new St.BoxLayout({
+                        style_class: 'team-selector-team-row',
+                        vertical: false,
+                      });
+                      
+                      let teamLabel = new St.Label({
+                        text: `    ${team.name}`,
+                        style_class: 'team-selector-team-label',
+                        x_expand: true,
+                      });
+                      
+                      const teamId = String(team.id);
+                      const isFollowed = followedTeams.includes(teamId);
+                      
+                      let teamSwitch = new St.Button({
+                        style_class: isFollowed
+                          ? 'team-selector-switch team-selector-switch-active'
+                          : 'team-selector-switch',
+                        label: isFollowed ? '✓' : '',
+                        x_align: Clutter.ActorAlign.END,
+                      });
+                      
+                      teamSwitch.connect('clicked', () => {
+                        let currentFollowed = this._settings.get_strv('followed-teams');
+                        const index = currentFollowed.indexOf(teamId);
+                        
+                        if (index >= 0) {
+                          currentFollowed.splice(index, 1);
+                          teamSwitch.remove_style_class_name('team-selector-switch-active');
+                          teamSwitch.set_label('');
+                          gjsLogger.log('TeamSelector: Unfollowed team:', team.name);
+                        } else {
+                          currentFollowed.push(teamId);
+                          teamSwitch.add_style_class_name('team-selector-switch-active');
+                          teamSwitch.set_label('✓');
+                          gjsLogger.log('TeamSelector: Followed team:', team.name);
+                        }
+                        
+                        this._settings.set_strv('followed-teams', currentFollowed);
+                      });
+                      
+                      teamBox.add_child(teamLabel);
+                      teamBox.add_child(teamSwitch);
+                      teamsContainer.add_child(teamBox);
+                    }
+                  } else {
+                    gjsLogger.log('TeamSelector: No teams found for competition', comp.id);
+                    let errorLabel = new St.Label({
+                      text: '  No teams found for this competition.',
+                      style_class: 'no-teams-label',
+                    });
+                    teamsContainer.add_child(errorLabel);
+                  }
+                } else {
+                  // Toggle visibility if already loaded
+                  teamsContainer.set_visible(!teamsContainer.get_visible());
+                }
+              } catch (error) {
+                gjsLogger.logError(error, 'TeamSelector: Failed to load teams for competition ' + comp.name);
+                teamsContainer.destroy_all_children();
+                let errorLabel = new St.Label({
+                  text: '  Error loading teams: ' + error.message,
+                  style_class: 'no-teams-label',
+                });
+                teamsContainer.add_child(errorLabel);
+                teamsContainer.set_visible(true);
               }
-              this._settings.set_strv('followed-teams', currentFollowed);
-              console.log('TeamSelector: Updated followed teams:', currentFollowed);
             });
-
-            teamBox.add_child(teamLabel);
-            teamBox.add_child(teamSwitch);
-            teamsContainer.add_child(teamBox);
           }
+          
+          this._contentBox.add_child(compsContainer);
+          countrySections[country] = { countryButton, compsContainer };
 
-          this._contentBox.add_child(teamsContainer);
-
-          // Toggle teams visibility when league button is clicked
-          leagueButton.connect('clicked', () => {
-            const isVisible = teamsContainer.get_visible();
-            teamsContainer.set_visible(!isVisible);
-            leagueLabel.set_text(isVisible ? `▶ ${CONSTANTS.DISPLAY_NAME[league] || league}` : `▼ ${CONSTANTS.DISPLAY_NAME[league] || league}`);
+          // Toggle competitions visibility when country row is clicked
+          countryButton.connect('clicked', () => {
+            gjsLogger.log('TeamSelector: Country clicked:', country);
+            const isVisible = compsContainer.get_visible();
+            compsContainer.set_visible(!isVisible);
+            countryButton.label = isVisible ? `▶ ${country}` : `▼ ${country}`;
           });
-
-          // Add separator between leagues
-          let separator = new St.Widget({
-            style_class: 'team-selector-separator',
-            height: 1,
-          });
-          this._contentBox.add_child(separator);
         }
+
+        // Search filter logic
+        searchEntry.clutter_text.connect('text-changed', () => {
+          const query = searchEntry.get_text().toLowerCase();
+          gjsLogger.log('TeamSelector: Search query:', query);
+          
+          for (const country of Object.keys(countrySections)) {
+            const { countryButton, compsContainer } = countrySections[country];
+            let matchCountry = country.toLowerCase().includes(query);
+            let matchComp = false;
+            
+            compsContainer.get_children().forEach(compBox => {
+              const compButton = compBox.get_children()[0];
+              const compName = compButton.label.toLowerCase();
+              const visible = compName.includes(query) || matchCountry;
+              compBox.set_visible(visible);
+              
+              if (visible) matchComp = true;
+              
+              // Collapse teams when searching
+              if (compBox.get_children().length > 1) {
+                compBox.get_children()[1].set_visible(false);
+              }
+            });
+            
+            // Only show country if it or any of its competitions match
+            const shouldShow = query === '' || matchCountry || matchComp;
+            countryButton.set_visible(shouldShow);
+            compsContainer.set_visible(shouldShow && (matchCountry || matchComp));
+            
+            if (query !== '') {
+              countryButton.label = `▶ ${country}`;
+            }
+          }
+        });
+        
+        gjsLogger.log('TeamSelector: Population complete');
       } catch (error) {
-        console.error('TeamSelector: Failed to populate teams:', error);
+        gjsLogger.logError(error, 'TeamSelector: Failed to populate team selector');
         this._contentBox.destroy_all_children();
         let errorLabel = new St.Label({
           text: 'Error loading teams: ' + error.message,
