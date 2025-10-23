@@ -12,6 +12,7 @@ import * as CONSTANTS from "../const.js";
 
 import ColosseumClient from "../client.js";
 import { GameLink } from "./game_link.js";
+import { TeamSelectorDialog } from "./team_selector.js";
 
 const EXT_PATH = import.meta.url;
 
@@ -31,7 +32,7 @@ export const Colosseum = GObject.registerClass(
 
       this._icon = new St.Icon({
         gicon: Gio.icon_new_for_string(
-          EXT_PATH.replace("extension.js", "/icon/colosseum-symbolic.svg"),
+          EXT_PATH.replace("widgets/colosseum.js", "icon/colosseum-symbolic.svg"),
         ),
         icon_size: 24,
       });
@@ -199,6 +200,19 @@ export const Colosseum = GObject.registerClass(
 
     _createMenu() {
       let menus = [];
+
+      // Add Configure Teams menu item at the top
+      let configureTeamsItem = new PopupMenu.PopupMenuItem("Configure Teams");
+      configureTeamsItem.connect('activate', () => {
+        console.log('Colosseum: Opening team selector dialog...');
+        this._openTeamSelector();
+      });
+      menus.push(configureTeamsItem);
+
+      // Add separator
+      let separator = new PopupMenu.PopupSeparatorMenuItem();
+      menus.push(separator);
+
       // We'll flatten all games into a single chronological list and then
       // render them grouped by date. This includes current games (this._scores)
       // and next games (this._nextGames) when enabled.
@@ -415,6 +429,17 @@ export const Colosseum = GObject.registerClass(
       return menus;
     }
 
+    _openTeamSelector() {
+      try {
+        console.log('Colosseum: Creating team selector dialog...');
+        const dialog = new TeamSelectorDialog(this._settings, CONSTANTS);
+        dialog.open();
+        console.log('Colosseum: Team selector dialog opened');
+      } catch (error) {
+        console.error('Colosseum: Failed to open team selector:', error);
+      }
+    }
+
     _getUpdateSec() {
       return (this._settings.get_int(CONSTANTS.PREF_UPDATE_FREQ) || 5) * 60;
     }
@@ -424,15 +449,20 @@ export const Colosseum = GObject.registerClass(
     }
 
     async _update() {
+      console.log('Colosseum: Starting _update...');
       await this._loadData();
+      console.log('Colosseum: Data loaded, creating menu...');
       let menus = this._createMenu();
+      console.log('Colosseum: Menu created with', menus.length, 'items');
       this.menu.removeAll();
 
       for (let i = 0; i < menus.length; i++) {
         this.menu.addMenuItem(menus[i]);
       }
 
+      console.log('Colosseum: Setting top bar text...');
       this._setTopBarText();
+      console.log('Colosseum: Top bar text set');
 
       if (this._timeout) {
         GLib.source_remove(this._timeout);
@@ -444,12 +474,17 @@ export const Colosseum = GObject.registerClass(
         this._getUpdateSec(),
         this._update.bind(this),
       );
+      console.log('Colosseum: Update complete, next update in', this._getUpdateSec(), 'seconds');
     }
 
     async _loadData() {
+      console.log('Colosseum: Loading scores...');
       this._scores = await this._client.getScores();
+      console.log('Colosseum: Scores loaded:', this._scores.length, 'leagues');
       if (this._client.isShowNextGamesEnabled()) {
+        console.log('Colosseum: Loading next games...');
         this._nextGames = await this._client.getNextGames();
+        console.log('Colosseum: Next games loaded:', this._nextGames.length, 'leagues');
       } else {
         this._nextGames = [];
       }

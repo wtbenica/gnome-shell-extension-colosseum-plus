@@ -1,5 +1,6 @@
 import GLib from "gi://GLib";
 import Soup from "gi://Soup";
+import Gio from "gi://Gio";
 
 const STATUS = {
   TBD: "0",
@@ -47,6 +48,49 @@ const STATUS = {
   FINAL_SCORE_ABANDONED: "51",
 };
 
+function loadEnv() {
+  // Try to load from extension directory first
+  const extensionPath = GLib.get_home_dir() + '/.local/share/gnome-shell/extensions/colosseum@sereneblue';
+  let envFile = Gio.File.new_for_path(extensionPath + '/.env');
+  
+  // If not found, try current directory (for development)
+  if (!envFile.query_exists(null)) {
+    envFile = Gio.File.new_for_path('.env');
+  }
+  
+  if (!envFile.query_exists(null)) {
+    console.warn('Colosseum: No .env file found. API key will not be available.');
+    return {};
+  }
+  
+  try {
+    const [success, contents] = envFile.load_contents(null);
+    if (!success) {
+      return {};
+    }
+    const text = new TextDecoder().decode(contents);
+    const env = {};
+    text.split('\n').forEach(line => {
+      const [key, ...valueParts] = line.split('=');
+      if (key && valueParts.length) {
+        let value = valueParts.join('=').trim();
+        // Remove quotes if present
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+        env[key.trim()] = value;
+      }
+    });
+    return env;
+  } catch (error) {
+    console.error('Colosseum: Failed to load .env file:', error);
+    return {};
+  }
+}
+
+const env = loadEnv();
+const API_KEY = env.API_FOOTBALL_KEY;
+
 export default class ColosseumClient {
   constructor(constants, settings) {
     this.session = new Soup.Session();
@@ -66,53 +110,33 @@ export default class ColosseumClient {
       },
     );
 
-    this.BASE_API_URL = "https://site.api.espn.com/apis/site/v2/sports/";
-    this.API_URLS = {
-      Bund: [this.BASE_API_URL + "soccer/ger.1/scoreboard"],
-      Bund2: [this.BASE_API_URL + "soccer/ger.2/scoreboard"],
-      "CONCACAF Gold Cup": [
-        this.BASE_API_URL + "soccer/concacaf.gold/scoreboard",
-        this.BASE_API_URL + "soccer/concacaf.gold_qual/scoreboard",
-      ],
-      "Copa America": [
-        this.BASE_API_URL + "soccer/conmebol.america/scoreboard",
-      ],
-      UCL: [this.BASE_API_URL + "soccer/uefa.champions/scoreboard"],
-      "English League Championship": [
-        this.BASE_API_URL + "soccer/eng.2/scoreboard",
-      ],
-      "English League One": [this.BASE_API_URL + "soccer/eng.3/scoreboard"],
-      EPL: [this.BASE_API_URL + "soccer/eng.1/scoreboard"],
-      ISR: [this.BASE_API_URL + "soccer/isr.1/scoreboard"],
-      "FA Cup": [this.BASE_API_URL + "soccer/eng.fa/scoreboard"],
-      "FIFA World Cup": [this.BASE_API_URL + "soccer/fifa.world/scoreboard"],
-      LaLiga: [this.BASE_API_URL + "soccer/esp.1/scoreboard"],
-      LaLigaMX: [this.BASE_API_URL + "soccer/mex.1/scoreboard"],
-      "Leagues Cup": [
-        this.BASE_API_URL + "soccer/concacaf.leagues.cup/scoreboard",
-      ],
-      "Ligue 1": [this.BASE_API_URL + "soccer/fra.1/scoreboard"],
-      MLS: [this.BASE_API_URL + "soccer/usa.1/scoreboard"],
-      "Serie A": [this.BASE_API_URL + "soccer/ita.1/scoreboard"],
-      "UEFA Champions League": [
-        this.BASE_API_URL + "soccer/uefa.champions/scoreboard",
-        this.BASE_API_URL + "soccer/uefa.champions_qual/scoreboard",
-      ],
-      "UEFA Europa Conference League": [
-        this.BASE_API_URL + "soccer/uefa.europa.conf/scoreboard",
-        this.BASE_API_URL + "soccer/uefa.europa.conf_qual/scoreboard",
-      ],
-      "UEFA Europa League": [
-        this.BASE_API_URL + "soccer/uefa.europa/scoreboard",
-        this.BASE_API_URL + "soccer/uefa.europa_qual/scoreboard",
-      ],
-      "UEFA European Championship": [
-        this.BASE_API_URL + "soccer/uefa.euro/scoreboard",
-        this.BASE_API_URL + "soccer/uefa.euroq/scoreboard",
-      ],
-      "UEFA Women's Champions League": [
-        this.BASE_API_URL + "soccer/uefa.wchampions/scoreboard",
-      ],
+    this.BASE_API_URL = "https://v3.football.api-sports.io/";
+    this.API_KEY = API_KEY;
+
+    // Mapping from our league names to API-Sports league IDs
+    this.LEAGUE_MAPPING = {
+      Bund: 78, // Bundesliga
+      Bund2: 79, // 2. Bundesliga
+      UCL: 2, // UEFA Champions League
+      "English League Championship": 40, // EFL Championship
+      "English League One": 41, // EFL League One
+      EPL: 39, // Premier League
+      ISR: 233, // Ligat ha'Al (Israeli Premier League)
+      LaLiga: 140, // La Liga
+      LaLigaMX: 262, // Liga MX
+      "Ligue 1": 61, // Ligue 1
+      MLS: 253, // Major League Soccer
+      "Serie A": 135, // Serie A
+      // Tournaments
+      "CONCACAF Gold Cup": 22,
+      "Copa America": 9,
+      "FA Cup": 45,
+      "FIFA World Cup": 1,
+      "Leagues Cup": 667,
+      "UEFA Europa Conference League": 848,
+      "UEFA European Championship": 4,
+      "UEFA Europa League": 3,
+      "UEFA Women's Champions League": 975,
     };
 
     this._CONSTANTS = constants;
@@ -124,41 +148,38 @@ export default class ColosseumClient {
   }
 
   getLeagueScoreboard(league, date, cacheBuster) {
-    let urls = this.API_URLS[league].map(
-      (l) => `${l}?limit=1000&dates=${date}&${cacheBuster}`,
-    );
-
-    let requests = [];
-
-    for (let i = 0; i < urls.length; i++) {
-      let message = Soup.Message.new("GET", urls[i]);
-
-      requests.push(
-        new Promise((resolve, reject) => {
-          this.session.send_and_read_async(
-            message,
-            GLib.PRIORITY_DEFAULT,
-            null,
-            function (session, res) {
-              let data = session.send_and_read_finish(res);
-
-              if (data) {
-                try {
-                  data = this._decoder.decode(data.toArray());
-                  resolve(JSON.parse(data));
-                } catch (e) {
-                  resolve([]);
-                }
-              } else {
-                resolve([]);
-              }
-            }.bind(this),
-          );
-        }),
-      );
+    const leagueId = this.LEAGUE_MAPPING[league];
+    if (!leagueId) {
+      return Promise.resolve([]);
     }
 
-    return Promise.all(requests);
+    const url = `${this.BASE_API_URL}fixtures?league=${leagueId}&season=2024&date=${date}`;
+
+    const message = Soup.Message.new("GET", url);
+    message.request_headers.append("x-rapidapi-key", this.API_KEY);
+    message.request_headers.append("x-rapidapi-host", "v3.football.api-sports.io");
+
+    return new Promise((resolve, reject) => {
+      this.session.send_and_read_async(
+        message,
+        GLib.PRIORITY_DEFAULT,
+        null,
+        (session, res) => {
+          const data = session.send_and_read_finish(res);
+          if (data) {
+            try {
+              const text = this._decoder.decode(data.toArray());
+              const json = JSON.parse(text);
+              resolve([json]); // Wrap in array to match current structure
+            } catch (e) {
+              resolve([]);
+            }
+          } else {
+            resolve([]);
+          }
+        }
+      );
+    });
   }
 
   async getScores() {
@@ -193,23 +214,25 @@ export default class ColosseumClient {
         );
 
         for (let j = 0; j < data.length; j++) {
-          for (let k = 0; k < data[j].events.length; k++) {
-            let e = this.parseEvent(data[j].events[k]);
+          if (data[j].response) {
+            for (let k = 0; k < data[j].response.length; k++) {
+              let e = this.parseEvent(data[j].response[k]);
 
-            let isFollowedTeam = [e.home.id, e.away.id].some(
-              (t) => followedTeams.indexOf(t) >= 0,
-            );
-
-            if (followOnlyMode) {
-              if (isFollowedTeam) l.games.push(e);
-            } else {
-              l.games.push(e);
-            }
-
-            if (isFollowedTeam && e.live) {
-              l.following.push(
-                `${e.home.teamAbbr}  ${e.home.score} - ${e.away.score}  ${e.away.teamAbbr} [${e.meta}]`,
+              let isFollowedTeam = [e.home.id, e.away.id].some(
+                (t) => followedTeams.indexOf(t) >= 0,
               );
+
+              if (followOnlyMode) {
+                if (isFollowedTeam) l.games.push(e);
+              } else {
+                l.games.push(e);
+              }
+
+              if (isFollowedTeam && e.live) {
+                l.following.push(
+                  `${e.home.teamAbbr}  ${e.home.score} - ${e.away.score}  ${e.away.teamAbbr} [${e.meta}]`,
+                );
+              }
             }
           }
         }
@@ -235,9 +258,11 @@ export default class ColosseumClient {
         );
 
         for (let j = 0; j < data.length; j++) {
-          for (let k = 0; k < data[j].events.length; k++) {
-            let e = this.parseEvent(data[j].events[k]);
-            l.games.push(e);
+          if (data[j].response) {
+            for (let k = 0; k < data[j].response.length; k++) {
+              let e = this.parseEvent(data[j].response[k]);
+              l.games.push(e);
+            }
           }
         }
       } catch (error) {}
@@ -279,17 +304,19 @@ export default class ColosseumClient {
           );
 
           for (let j = 0; j < data.length; j++) {
-            for (let k = 0; k < data[j].events.length; k++) {
-              let e = this.parseEvent(data[j].events[k]);
+            if (data[j].response) {
+              for (let k = 0; k < data[j].response.length; k++) {
+                let e = this.parseEvent(data[j].response[k]);
 
-              let isFollowedTeam = [e.home.id, e.away.id].some(
-                (t) => followedTeams.indexOf(t) >= 0,
-              );
+                let isFollowedTeam = [e.home.id, e.away.id].some(
+                  (t) => followedTeams.indexOf(t) >= 0,
+                );
 
-              if (followOnlyMode) {
-                if (isFollowedTeam) l.games.push(e);
-              } else {
-                l.games.push(e);
+                if (followOnlyMode) {
+                  if (isFollowedTeam) l.games.push(e);
+                } else {
+                  l.games.push(e);
+                }
               }
             }
           }
@@ -321,9 +348,11 @@ export default class ColosseumClient {
           );
 
           for (let j = 0; j < data.length; j++) {
-            for (let k = 0; k < data[j].events.length; k++) {
-              let e = this.parseEvent(data[j].events[k]);
-              l.games.push(e);
+            if (data[j].response) {
+              for (let k = 0; k < data[j].response.length; k++) {
+                let e = this.parseEvent(data[j].response[k]);
+                l.games.push(e);
+              }
             }
           }
         } catch (error) {}
@@ -345,95 +374,49 @@ export default class ColosseumClient {
 
   getDate(date) {
     let parts = this.dateFmt.format(date).split("/");
-    return parts[2] + parts[0] + parts[1];
+    return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
   }
 
-  parseEvent(evt) {
-    let home = evt.competitions[0].competitors.find(
-      (c) => c.homeAway === "home",
-    );
-    let away = evt.competitions[0].competitors.find(
-      (c) => c.homeAway === "away",
-    );
+  parseEvent(fixture) {
+    const event = {};
 
-    let event = {};
+    event.live = fixture.fixture.status.elapsed > 0 && fixture.fixture.status.short !== "FT";
+    event.link = null; // API doesn't provide links
+    event.isComplete = fixture.fixture.status.short === "FT" || fixture.fixture.status.short === "AET" || fixture.fixture.status.short === "PEN";
 
-    let gameLink = evt.links.filter(
-      (l) => l.text === "Gamecast" || l.text === "Summary",
-    )[0];
+    event.home = {
+      id: String(fixture.teams.home.id),
+      team: fixture.teams.home.name,
+      teamAbbr: fixture.teams.home.name.substring(0, 3).toUpperCase(),
+      score: fixture.goals.home !== null ? fixture.goals.home : "",
+      isWinner: fixture.teams.home.winner,
+      isLoser: fixture.teams.away.winner,
+    };
 
-    event.live = false;
-    event.link = gameLink ? gameLink.href : null;
-    event.isComplete = evt.status.type.completed;
-    event.home = {};
-  // Normalize ids to strings so they compare reliably with stored prefs
-  event.home.id = String(home.id);
-    event.home.team = home.team.shortDisplayName;
-    event.home.teamAbbr = home.team.abbreviation;
-    event.home.score = home.score;
-    event.home.isWinner = "winner" in home ? home.winner : false;
-    event.home.isLoser =
-      "winner" in home ? (home.winner === false ? true : false) : false;
+    event.away = {
+      id: String(fixture.teams.away.id),
+      team: fixture.teams.away.name,
+      teamAbbr: fixture.teams.away.name.substring(0, 3).toUpperCase(),
+      score: fixture.goals.away !== null ? fixture.goals.away : "",
+      isWinner: fixture.teams.away.winner,
+      isLoser: fixture.teams.home.winner,
+    };
 
-    event.away = {};
-  event.away.id = String(away.id);
-    event.away.team = away.team.shortDisplayName;
-    event.away.teamAbbr = away.team.abbreviation;
-    event.away.score = away.score;
-    event.away.isWinner = "winner" in away ? away.winner : false;
-    event.away.isLoser =
-      "winner" in away ? (away.winner === false ? true : false) : false;
-
-    if (
-      evt.status.type.id === STATUS.SCHEDULED ||
-      evt.status.type.id === STATUS.DELAYED ||
-      evt.status.type.id === STATUS.RAIN_DELAY
-    ) {
+    if (fixture.fixture.status.short === "NS") {
       event.home.score = "";
       event.away.score = "";
-      event.meta = this.timeFmt.format(new Date(evt.date));
-    } else if (
-      evt.status.type.id === STATUS.FINAL ||
-      evt.status.type.id === STATUS.FINAL_SCORE_ABANDONED ||
-      evt.status.type.id === STATUS.FINAL_SCORE_AFTER_PENALTIES ||
-      evt.status.type.id === STATUS.FINAL_SCORE_AFTER_EXTRA_TIME ||
-      evt.status.type.id === STATUS.FINAL_SCORE_AFTER_GOLDEN_GOAL ||
-      evt.status.type.id === STATUS.WALKOVER
-    ) {
+      event.meta = this.timeFmt.format(new Date(fixture.fixture.date));
+    } else if (event.isComplete) {
       event.meta = "Final";
-    } else if (
-      evt.status.type.id === STATUS.IN_PROGRESS ||
-      evt.status.type.id === STATUS.BEGIN_PERIOD ||
-      evt.status.type.id === STATUS.END_PERIOD ||
-      evt.status.type.id === STATUS.HALFTIME ||
-      evt.status.type.id === STATUS.OVERTIME ||
-      evt.status.type.id === STATUS.FIRST_HALF ||
-      evt.status.type.id === STATUS.SECOND_HALF ||
-      evt.status.type.id === STATUS.SHOOTOUT ||
-      evt.status.type.id === STATUS.GOLDEN_TIME ||
-      evt.status.type.id === STATUS.INTERMEDIATE ||
-      evt.status.type.id === STATUS.EXTRA_TIME_HALF_TIME ||
-      evt.status.type.id === STATUS.FIXTURE_NO_LIVE_COVERAGE
-    ) {
-      event.live = true;
-      event.meta = evt.status.type.shortDetail;
-    } else if (evt.status.type.id === STATUS.POSTPONED) {
-      event.isComplete = true;
-      event.meta = "Post";
-    } else if (evt.status.type.id === STATUS.SUSPENDED) {
-      event.isComplete = true;
-      event.meta = "Susp";
+    } else if (event.live) {
+      event.meta = fixture.fixture.status.long;
     } else {
-      event.home.score = event.isComplete ? home.score : "";
-      event.away.score = event.isComplete ? away.score : "";
-      event.meta = evt.status.type.shortDetail;
+      event.home.score = event.isComplete ? fixture.goals.home : "";
+      event.away.score = event.isComplete ? fixture.goals.away : "";
+      event.meta = fixture.fixture.status.long;
     }
-    // Preserve the original event date as a timestamp for sorting later
-    try {
-      event.timestamp = new Date(evt.date).getTime();
-    } catch (e) {
-      event.timestamp = Date.now();
-    }
+
+    event.timestamp = new Date(fixture.fixture.date).getTime();
 
     return event;
   }
@@ -471,15 +454,11 @@ export default class ColosseumClient {
   }
 
   getFollowedTeams(league) {
-    let teams = [];
-
-    for (let i = 0; i < this._CONSTANTS.SPORTS[league].length; i++) {
-      if (this._settings.get_boolean(this._CONSTANTS.SPORTS[league][i].pref)) {
-        teams.push(this._CONSTANTS.SPORTS[league][i].id.toString());
-      }
-    }
-
-    return teams;
+    const followedTeams = this._settings.get_strv("followed-teams");
+    const leagueTeams = this._CONSTANTS.SPORTS[league] || [];
+    return leagueTeams
+      .filter(team => followedTeams.includes(team.id.toString()))
+      .map(team => team.id.toString());
   }
 
   isFollowOnlyEnabled() {
@@ -488,5 +467,31 @@ export default class ColosseumClient {
 
   isShowNextGamesEnabled() {
     return this._settings.get_boolean(this._CONSTANTS.PREF_SHOW_NEXT_GAMES);
+  }
+
+  async getAvailableTeams() {
+    const enabledLeagues = this.getEnabledLeagues();
+    const teams = [];
+
+    for (const league of enabledLeagues) {
+      const leagueTeams = this._CONSTANTS.SPORTS[league] || [];
+      for (const team of leagueTeams) {
+        teams.push({
+          id: team.id,
+          name: team.name,
+          league: league
+        });
+      }
+    }
+
+    // Sort teams by league, then by name
+    teams.sort((a, b) => {
+      if (a.league !== b.league) {
+        return a.league.localeCompare(b.league);
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    return teams;
   }
 }

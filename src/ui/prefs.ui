@@ -89,15 +89,5 @@
         </child>
       </object>
     </child>
-    <child>
-      <object class="AdwPreferencesGroup" id="leagues">
-        <property name="title" translatable="true">Enabled Leagues</property>
-      </object>
-    </child>
-    <child>
-      <object class="AdwPreferencesGroup" id="tournaments">
-        <property name="title" translatable="true">Enabled Tournaments</property>
-      </object>
-    </child>
   </object>
 </interface>

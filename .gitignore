@@ -1,3 +1,4 @@
 .github/copilot-instructions.md
 .github/ideas.md
 *.zip
+.env
