@@ -57,20 +57,41 @@ export const TeamSelectorDialog = GObject.registerClass(
       const sports = this._constants.SPORTS || {};
       const displayNames = this._constants.DISPLAY_NAME || {};
 
-      // Group teams by league
-      const leagues = Object.keys(sports);
+      this._teamCheckboxes = new Map();
+      this._leagues = Object.keys(sports);
+      this._currentLeagueIndex = 0;
+      this._followedTeams = followedTeams;
+      this._sports = sports;
+      this._displayNames = displayNames;
 
-      for (const league of leagues) {
-        // Add league header
-        let leagueHeader = new St.Label({
-          text: displayNames[league] || league,
-          style_class: 'team-selector-league-header',
-        });
-        this._contentBox.add_child(leagueHeader);
+      // Start populating in batches to avoid blocking the UI
+      this._populateNextBatch();
+    }
+
+    _populateNextBatch() {
+      const batchSize = 10; // Process 10 teams at a time
+      let teamsProcessed = 0;
+
+      while (this._currentLeagueIndex < this._leagues.length && teamsProcessed < batchSize) {
+        const league = this._leagues[this._currentLeagueIndex];
+        const teams = this._sports[league] || [];
+
+        // Add league header if not already added
+        if (!this._leagueHeadersAdded) {
+          this._leagueHeadersAdded = new Set();
+        }
+        if (!this._leagueHeadersAdded.has(league)) {
+          let leagueHeader = new St.Label({
+            text: this._displayNames[league] || league,
+            style_class: 'team-selector-league-header',
+          });
+          this._contentBox.add_child(leagueHeader);
+          this._leagueHeadersAdded.add(league);
+        }
 
         // Add teams for this league
-        const teams = sports[league] || [];
-        for (const team of teams) {
+        while (this._currentTeamIndex < teams.length && teamsProcessed < batchSize) {
+          const team = teams[this._currentTeamIndex];
           let teamBox = new St.BoxLayout({
             style_class: 'team-selector-team-row',
             reactive: true,
@@ -78,7 +99,7 @@ export const TeamSelectorDialog = GObject.registerClass(
           });
 
           let checkbox = new CheckBox.CheckBox(team.name);
-          checkbox.checked = followedTeams.includes(team.id.toString());
+          checkbox.checked = this._followedTeams.includes(team.id.toString());
 
           this._teamCheckboxes.set(team.id.toString(), checkbox);
 
@@ -91,14 +112,28 @@ export const TeamSelectorDialog = GObject.registerClass(
           });
 
           this._contentBox.add_child(teamBox);
+          this._currentTeamIndex++;
+          teamsProcessed++;
         }
 
-        // Add separator between leagues
-        let separator = new St.Widget({
-          style_class: 'team-selector-separator',
-          height: 1,
+        if (this._currentTeamIndex >= teams.length) {
+          // Finished this league, add separator
+          let separator = new St.Widget({
+            style_class: 'team-selector-separator',
+            height: 1,
+          });
+          this._contentBox.add_child(separator);
+          this._currentLeagueIndex++;
+          this._currentTeamIndex = 0;
+        }
+      }
+
+      // If more to process, schedule next batch
+      if (this._currentLeagueIndex < this._leagues.length) {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
+          this._populateNextBatch();
+          return GLib.SOURCE_REMOVE;
         });
-        this._contentBox.add_child(separator);
       }
     }
 

@@ -433,7 +433,7 @@ export const Colosseum = GObject.registerClass(
     _openTeamSelector() {
       try {
         console.log('Colosseum: Creating team selector dialog...');
-        const dialog = new TeamSelectorDialog(this._settings);
+        const dialog = new TeamSelectorDialog(this._settings, this._constants);
         dialog.open();
         console.log('Colosseum: Team selector dialog opened');
       } catch (error) {

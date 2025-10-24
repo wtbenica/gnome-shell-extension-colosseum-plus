@@ -21,11 +21,31 @@ class DataLoaderClass {
   async fetchCompetitions() {
     logInfo('DataLoader: Fetching competitions');
     
+    // Define the target leagues mapping
+    const targetLeagues = {
+      'Premier League': { id: 'sr:competition:17', category: 'England' },
+      'LaLiga': { id: 'sr:competition:8', category: 'Spain' },
+      'MLS': { id: 'sr:competition:242', category: 'USA' },
+      'Liga MX': { id: 'sr:competition:27464', category: 'Mexico' } // Apertura child competition
+    };
+
     // Check cache first
     const cachedCompetitions = this.cacheManager.getRawCompetitions();
-    if (cachedCompetitions.length > 0 && !this.cacheManager.shouldUpdate()) {
-      logInfo('DataLoader: Returning cached competitions:', cachedCompetitions.length);
-      return cachedCompetitions;
+    // If cache exists, synthesize a competitions list that guarantees entries for our target leagues.
+    if (cachedCompetitions.length > 0) {
+      logInfo('DataLoader: Found cached competitions:', cachedCompetitions.length);
+      const cacheById = new Map(cachedCompetitions.map(c => [c.id, c]));
+      const result = [];
+      for (const [name, details] of Object.entries(targetLeagues)) {
+        if (cacheById.has(details.id)) {
+          result.push(cacheById.get(details.id));
+        } else {
+          // create a lightweight placeholder so the UI can show the league header immediately
+          result.push({ id: details.id, name: name, category: details.category, _placeholder: true });
+        }
+      }
+      logInfo('DataLoader: Returning synthesized competitions (cache + placeholders):', result.map(c => `${c.name} - ${c.id}${c._placeholder ? ' (placeholder)' : ''}`));
+      return result;
     }
 
     // Fetch from API
@@ -34,24 +54,21 @@ class DataLoaderClass {
       // Log all competition names for debugging
       logInfo('DataLoader: All competitions:', competitions.map(c => `${c.name} (${c.category?.name}) - ID: ${c.id}${c.parent_id ? ` - Parent: ${c.parent_id}` : ''}`));
             // Filter to only the 4 target leagues
-      // Hard-coded target leagues with their competition IDs (using parent competitions where applicable)
-      const targetLeagues = {
-        'Premier League': { id: 'sr:competition:17', category: 'England' },
-        'LaLiga': { id: 'sr:competition:8', category: 'Spain' },
-        'MLS': { id: 'sr:competition:242', category: 'USA' },
-        'Liga MX': { id: 'sr:competition:27464', category: 'Mexico' } // Using Apertura child competition
-      };
+      // Filter to only the 4 target leagues (use the same mapping defined above)
       const filteredCompetitions = competitions.filter(comp => {
-        for (const [name, details] of Object.entries(targetLeagues)) {
-          if (comp.id === details.id && comp.category?.name === details.category) {
+        for (const details of Object.values(targetLeagues)) {
+          if (comp.id === details.id) {
             return true;
           }
         }
         return false;
       });
       logInfo('DataLoader: Filtered competitions:', filteredCompetitions.map(c => `${c.name} (${c.category?.name}) - ID: ${c.id}${c.parent_id ? ` - Parent: ${c.parent_id}` : ''}`));
-      // Update cache with competitions and empty teams for now
-      this.cacheManager.save([], filteredCompetitions, []);
+      // Update cache with competitions. Preserve any existing leagues/teams in cache.
+      const currentLeagues = this.cacheManager.getLeagues();
+      const currentTeams = this.cacheManager.data.teams || {};
+      // save(leagues, teams, rawCompetitions)
+      this.cacheManager.save(currentLeagues, currentTeams, filteredCompetitions);
       logInfo('DataLoader: Fetched and cached competitions:', filteredCompetitions.length);
       return filteredCompetitions;
     }
@@ -63,7 +80,8 @@ class DataLoaderClass {
     
     // Check cache first
     const cachedTeams = this.cacheManager.getTeams(competitionId);
-    if (cachedTeams.length > 0 && !this.cacheManager.shouldUpdate()) {
+    // Prefer cached teams if available to avoid unnecessary API calls.
+    if (cachedTeams.length > 0) {
       logInfo('DataLoader: Returning cached teams for', competitionId, ':', cachedTeams.length);
       return cachedTeams;
     }

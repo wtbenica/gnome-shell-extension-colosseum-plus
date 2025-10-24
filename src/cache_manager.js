@@ -37,6 +37,22 @@ export class CacheManager {
             'rawCompetitions:', parsed.rawCompetitions?.length || 0,
             'teams:', Object.keys(parsed.teams || {}).length);
           
+          // Handle legacy cache shape: some older saves stored competitions in `teams` by mistake.
+          // If rawCompetitions is empty but teams is an array of competition-like objects,
+          // migrate them into rawCompetitions and make teams an object map.
+          try {
+            if ((!parsed.rawCompetitions || parsed.rawCompetitions.length === 0) && Array.isArray(parsed.teams) && parsed.teams.length > 0) {
+              const first = parsed.teams[0];
+              if (first && first.id && first.category) {
+                logInfo('CacheManager: Detected legacy cache shape, migrating stored competitions into rawCompetitions');
+                parsed.rawCompetitions = parsed.teams;
+                parsed.teams = {};
+              }
+            }
+          } catch (e) {
+            logErr(e, 'CacheManager: Error during cache migration');
+          }
+
           return parsed;
         } else {
           logInfo('CacheManager: Failed to load cache file contents');

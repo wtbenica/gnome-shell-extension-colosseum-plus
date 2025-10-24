@@ -1,4 +1,5 @@
 import Clutter from "gi://Clutter";
+import GLib from "gi://GLib";
 import GObject from "gi://GObject";
 import St from "gi://St";
 import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
@@ -51,15 +52,19 @@ export const TeamSelectorDialog = GObject.registerClass(
     }
 
     async _populateTeamSelector() {
+      const startTime = Date.now();
       try {
-        logInfo('TeamSelector: Starting to populate team selector');
+        logInfo('TeamSelector: Starting to populate team selector at', startTime);
         this._contentBox.destroy_all_children();
-        
+
         // Fetch competitions from Sportradar (filtered to 4 leagues)
         const DataLoader = (await import('../data.js')).default;
-        logInfo('TeamSelector: Fetching competitions from DataLoader');
+        const t1 = Date.now();
+        logInfo('TeamSelector: Fetching competitions from DataLoader at', t1);
         const competitions = await DataLoader.fetchCompetitions();
-        
+        const t2 = Date.now();
+        logInfo('TeamSelector: fetchCompetitions returned', competitions ? competitions.length : 0, 'items in', (t2 - t1), 'ms');
+
         if (!competitions || competitions.length === 0) {
           logInfo('TeamSelector: No competitions available');
           let noLeaguesLabel = new St.Label({
@@ -70,50 +75,76 @@ export const TeamSelectorDialog = GObject.registerClass(
           return;
         }
 
-        logInfo('TeamSelector: Got', competitions.length, 'competitions');
+        // For each competition, create a league container and show a placeholder header immediately.
+        const followed = this._settings.get_strv('followed-teams');
+        let totalCollected = 0;
 
-        // Fetch teams for all competitions
-        let allTeams = [];
         for (const comp of competitions) {
-          logInfo('TeamSelector: Fetching teams for', comp.name);
+          // Create a per-league container so we can display the header immediately
+          const leagueContainer = new St.BoxLayout({ style_class: 'team-selector-league-container', vertical: true });
+          const leagueLabel = new St.Label({ text: comp.name, style_class: 'team-selector-league-header', x_expand: true });
+          leagueContainer.add_child(leagueLabel);
+
+          // Add a small status placeholder which we'll replace when teams arrive
+          const statusLabel = new St.Label({ text: comp._placeholder ? 'Not cached' : 'Loading teams...', style_class: 'team-selector-league-status' });
+          leagueContainer.add_child(statusLabel);
+
+          // Add the container to the main content box so the header is visible immediately
+          this._contentBox.add_child(leagueContainer);
+
+          const tCompStart = Date.now();
+          logInfo('TeamSelector: Fetching teams for', comp.name, '(', comp.id, ') at', tCompStart);
           const teams = await DataLoader.fetchCompetitionInfo(comp.id);
+          const tCompEnd = Date.now();
+          logInfo('TeamSelector: fetchCompetitionInfo for', comp.id, 'returned', teams ? teams.length : 0, 'teams in', (tCompEnd - tCompStart), 'ms');
+
           if (teams && teams.length > 0) {
-            // Add league name to each team
-            teams.forEach(team => {
-              team.leagueName = comp.name;
-            });
-            allTeams = allTeams.concat(teams);
+            teams.forEach(team => (team.leagueName = comp.name));
+            totalCollected += teams.length;
+
+            // Sort this competition's teams by name for stable order
+            teams.sort((a, b) => a.name.localeCompare(b.name));
+
+            // Remove the status label and render this competition's teams into the league container
+            leagueContainer.remove_child(statusLabel);
+            this._renderTeamsBatchedForLeague(teams, comp.name, followed, leagueContainer);
+          } else {
+            // Update the status label to indicate no teams are available
+            statusLabel.set_text(comp._placeholder ? 'Not cached' : 'No teams available');
+            logInfo('TeamSelector: No teams found for', comp.name);
           }
         }
 
-        logInfo('TeamSelector: Total teams collected:', allTeams.length);
-
-        if (allTeams.length === 0) {
-          let noTeamsLabel = new St.Label({
-            text: 'No teams available.',
-            style_class: 'no-teams-label',
-          });
-          this._contentBox.add_child(noTeamsLabel);
-          return;
-        }
-
-        // Sort teams by league then name
-        allTeams.sort((a, b) => {
-          if (a.leagueName !== b.leagueName) {
-            return a.leagueName.localeCompare(b.leagueName);
-          }
-          return a.name.localeCompare(b.name);
+        logInfo('TeamSelector: Total teams collected across competitions:', totalCollected);
+      } catch (error) {
+        logErr(error, 'TeamSelector: Failed to populate team selector');
+        this._contentBox.destroy_all_children();
+        let errorLabel = new St.Label({
+          text: 'Error loading teams: ' + error.message,
+          style_class: 'no-teams-label',
         });
+        this._contentBox.add_child(errorLabel);
+      }
+    }
 
-        // Get followed teams
-        const followedTeams = this._settings.get_strv('followed-teams');
+    _renderTeamsBatched(allTeams, followedTeams) {
+      logInfo('TeamSelector: Starting batched render of', allTeams.length, 'teams');
+      this._batchIndex = 0;
+      this._allTeams = allTeams;
+      this._followedCache = new Set(followedTeams || []);
+      this._currentLeague = null;
 
-        // Display teams with checkboxes
-        let currentLeague = null;
-        for (const team of allTeams) {
-          // Add league header if new league
-          if (currentLeague !== team.leagueName) {
-            currentLeague = team.leagueName;
+      const batchSize = 20; // tuneable
+
+      const processBatch = () => {
+        const start = Date.now();
+        let processed = 0;
+        while (this._batchIndex < this._allTeams.length && processed < batchSize) {
+          const team = this._allTeams[this._batchIndex];
+
+          // Add league header if needed
+          if (this._currentLeague !== team.leagueName) {
+            this._currentLeague = team.leagueName;
             let leagueLabel = new St.Label({
               text: team.leagueName,
               style_class: 'team-selector-league-header',
@@ -122,32 +153,21 @@ export const TeamSelectorDialog = GObject.registerClass(
             this._contentBox.add_child(leagueLabel);
           }
 
-          let teamBox = new St.BoxLayout({
-            style_class: 'team-selector-team-row',
-            vertical: false,
-          });
-          
-          let teamLabel = new St.Label({
-            text: team.name,
-            style_class: 'team-selector-team-label',
-            x_expand: true,
-          });
-          
+          let teamBox = new St.BoxLayout({ style_class: 'team-selector-team-row', vertical: false });
+          let teamLabel = new St.Label({ text: team.name, style_class: 'team-selector-team-label', x_expand: true });
+
           const teamId = String(team.id);
-          const isFollowed = followedTeams.includes(teamId);
-          
+          const isFollowed = this._followedCache.has(teamId);
+
           let teamSwitch = new St.Button({
-            style_class: isFollowed
-              ? 'team-selector-switch team-selector-switch-active'
-              : 'team-selector-switch',
+            style_class: isFollowed ? 'team-selector-switch team-selector-switch-active' : 'team-selector-switch',
             label: isFollowed ? '✓' : '',
             x_align: Clutter.ActorAlign.END,
           });
-          
+
           teamSwitch.connect('clicked', () => {
             let currentFollowed = this._settings.get_strv('followed-teams');
             const index = currentFollowed.indexOf(teamId);
-            
             if (index >= 0) {
               currentFollowed.splice(index, 1);
               teamSwitch.remove_style_class_name('team-selector-switch-active');
@@ -159,25 +179,115 @@ export const TeamSelectorDialog = GObject.registerClass(
               teamSwitch.set_label('✓');
               logInfo('TeamSelector: Followed team:', team.name);
             }
-            
             this._settings.set_strv('followed-teams', currentFollowed);
           });
-          
+
           teamBox.add_child(teamLabel);
           teamBox.add_child(teamSwitch);
           this._contentBox.add_child(teamBox);
+
+          this._batchIndex++;
+          processed++;
         }
-        
-        logInfo('TeamSelector: Population complete');
-      } catch (error) {
-        logErr(error, 'TeamSelector: Failed to populate team selector');
-        this._contentBox.destroy_all_children();
-        let errorLabel = new St.Label({
-          text: 'Error loading teams: ' + error.message,
-          style_class: 'no-teams-label',
-        });
-        this._contentBox.add_child(errorLabel);
+
+        const end = Date.now();
+        logInfo('TeamSelector: Batch processed', processed, 'teams in', (end - start), 'ms; overall progress', this._batchIndex, '/', this._allTeams.length);
+
+        if (this._batchIndex < this._allTeams.length) {
+          GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
+            processBatch();
+            return GLib.SOURCE_REMOVE;
+          });
+        } else {
+          logInfo('TeamSelector: Batched rendering complete');
+        }
+      };
+
+      // Kick off first batch
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
+        processBatch();
+        return GLib.SOURCE_REMOVE;
+      });
+    }
+
+    _renderTeamsBatchedForLeague(teams, leagueName, followedTeams, container) {
+      logInfo('TeamSelector: Starting batched render for league', leagueName, teams.length, 'teams');
+      let batchIndex = 0;
+      const batchSize = 12; // per-league batch size
+      const followedCache = new Set(followedTeams || []);
+
+      // If a container was provided (created by _populateTeamSelector), use it; otherwise create one and add a header
+      let leagueContainer = container;
+      if (!leagueContainer) {
+        leagueContainer = new St.BoxLayout({ style_class: 'team-selector-league-container', vertical: true });
+        const leagueLabel = new St.Label({ text: leagueName, style_class: 'team-selector-league-header', x_expand: true });
+        leagueContainer.add_child(leagueLabel);
+        this._contentBox.add_child(leagueContainer);
       }
+
+      const processBatch = () => {
+        const start = Date.now();
+        let processed = 0;
+        while (batchIndex < teams.length && processed < batchSize) {
+          const team = teams[batchIndex];
+
+          let teamBox = new St.BoxLayout({ style_class: 'team-selector-team-row', vertical: false });
+          let teamLabel = new St.Label({ text: team.name, style_class: 'team-selector-team-label', x_expand: true });
+
+          const teamId = String(team.id);
+          const isFollowed = followedCache.has(teamId);
+
+          let teamSwitch = new St.Button({
+            style_class: isFollowed ? 'team-selector-switch team-selector-switch-active' : 'team-selector-switch',
+            label: isFollowed ? '✓' : '',
+            x_align: Clutter.ActorAlign.END,
+          });
+
+          teamSwitch.connect('clicked', () => {
+            let currentFollowed = this._settings.get_strv('followed-teams');
+            const index = currentFollowed.indexOf(teamId);
+            if (index >= 0) {
+              currentFollowed.splice(index, 1);
+              teamSwitch.remove_style_class_name('team-selector-switch-active');
+              teamSwitch.set_label('');
+              followedCache.delete(teamId);
+              logInfo('TeamSelector: Unfollowed team:', team.name);
+            } else {
+              currentFollowed.push(teamId);
+              teamSwitch.add_style_class_name('team-selector-switch-active');
+              teamSwitch.set_label('✓');
+              followedCache.add(teamId);
+              logInfo('TeamSelector: Followed team:', team.name);
+            }
+            this._settings.set_strv('followed-teams', currentFollowed);
+          });
+
+          teamBox.add_child(teamLabel);
+          teamBox.add_child(teamSwitch);
+          leagueContainer.add_child(teamBox);
+
+          batchIndex++;
+          processed++;
+        }
+
+        const end = Date.now();
+        logInfo('TeamSelector:', leagueName, 'batch processed', processed, 'teams in', (end - start), 'ms; overall progress', batchIndex, '/', teams.length);
+
+        if (batchIndex < teams.length) {
+          GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
+            processBatch();
+            return GLib.SOURCE_REMOVE;
+          });
+        } else {
+          logInfo('TeamSelector: Batched rendering complete for league', leagueName);
+        }
+      };
+
+      // Kick off first per-league batch
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
+        processBatch();
+        return GLib.SOURCE_REMOVE;
+      });
     }
   }
 );
