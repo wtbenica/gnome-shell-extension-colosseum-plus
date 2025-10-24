@@ -466,17 +466,8 @@ export const Colosseum = GObject.registerClass(
       this._setTopBarText();
       console.log('Colosseum: Top bar text set');
 
-      if (this._timeout) {
-        GLib.source_remove(this._timeout);
-        this._timeout = null;
-      }
-
-      this._timeout = GLib.timeout_add_seconds(
-        GLib.PRIORITY_DEFAULT,
-        this._getUpdateSec(),
-        this._update.bind(this),
-      );
-      console.log('Colosseum: Update complete, next update in', this._getUpdateSec(), 'seconds');
+      // Removed periodic updates to disable live monitoring
+      console.log('Colosseum: Update complete, no periodic updates');
     }
 
     async _loadData() {

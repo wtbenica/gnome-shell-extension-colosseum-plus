@@ -271,3 +271,12 @@
 	color: rgba(255, 255, 255, 0.7);
 	font-style: italic;
 }
+
+.team-selector-league-header {
+	font-weight: bold;
+	font-size: 1.1em;
+	padding: 8px 0px 4px 0px;
+	color: #ffffff;
+	text-align: center;
+	margin-top: 10px;
+}

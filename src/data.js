@@ -31,11 +31,31 @@ class DataLoaderClass {
     // Fetch from API
     const competitions = await this.sportradarClient.getCompetitions();
     if (competitions.length > 0) {
+      // Log all competition names for debugging
+      logInfo('DataLoader: All competitions:', competitions.map(c => `${c.name} (${c.category?.name}) - ID: ${c.id}${c.parent_id ? ` - Parent: ${c.parent_id}` : ''}`));
+            // Filter to only the 4 target leagues
+      // Hard-coded target leagues with their competition IDs (using parent competitions where applicable)
+      const targetLeagues = {
+        'Premier League': { id: 'sr:competition:17', category: 'England' },
+        'LaLiga': { id: 'sr:competition:8', category: 'Spain' },
+        'MLS': { id: 'sr:competition:242', category: 'USA' },
+        'Liga MX': { id: 'sr:competition:27464', category: 'Mexico' } // Using Apertura child competition
+      };
+      const filteredCompetitions = competitions.filter(comp => {
+        for (const [name, details] of Object.entries(targetLeagues)) {
+          if (comp.id === details.id && comp.category?.name === details.category) {
+            return true;
+          }
+        }
+        return false;
+      });
+      logInfo('DataLoader: Filtered competitions:', filteredCompetitions.map(c => `${c.name} (${c.category?.name}) - ID: ${c.id}${c.parent_id ? ` - Parent: ${c.parent_id}` : ''}`));
       // Update cache with competitions and empty teams for now
-      this.cacheManager.save([], competitions, []);
-      logInfo('DataLoader: Fetched and cached competitions:', competitions.length);
+      this.cacheManager.save([], filteredCompetitions, []);
+      logInfo('DataLoader: Fetched and cached competitions:', filteredCompetitions.length);
+      return filteredCompetitions;
     }
-    return competitions;
+    return [];
   }
 
   async fetchCompetitionInfo(competitionId) {

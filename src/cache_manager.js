@@ -4,7 +4,7 @@ import Gio from "gi://Gio";
 import { logInfo, logErr } from "./logging/error_utils.js";
 
 const CACHE_FILE = GLib.get_user_cache_dir() + '/colosseum-data.json';
-const CACHE_DURATION_DAYS = 7;
+const CACHE_DURATION_DAYS = 30;
 
 /**
  * Manages local file cache for competitions and teams data
