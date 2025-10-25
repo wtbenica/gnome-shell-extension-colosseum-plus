@@ -1,7 +1,7 @@
 import GLib from "gi://GLib";
 import Soup from "gi://Soup";
 
-import { logInfo, logErr } from "./logging/error_utils.js";
+import { logErr } from "./logging/error_utils.js";
 
 /**
  * Sportradar API client for soccer data
@@ -18,7 +18,10 @@ export class SportradarClient {
    */
   async request(endpoint) {
     if (!this.apiKey) {
-      logInfo("SportradarClient: API key missing");
+      try {
+        // Prefer console logging so messages appear in GNOME Shell journal
+        console.warn(`SportradarClient: no API key provided, skipping request to ${endpoint}`);
+      } catch (e) {}
       return null;
     }
 
@@ -33,25 +36,31 @@ export class SportradarClient {
         GLib.PRIORITY_DEFAULT,
         null,
         (session, res) => {
-          try {
-            const data = session.send_and_read_finish(res);
-            if (data) {
-              const text = this._decoder.decode(data.toArray());
-              logInfo("SportradarClient: Response for", endpoint, "- length:", text.length);
-              
-              try {
-                const json = JSON.parse(text);
-                resolve(json);
-              } catch (e) {
-                logErr(e, "SportradarClient: Failed to parse response");
-                resolve(null);
-              }
-            } else {
-              logInfo("SportradarClient: No response from endpoint:", endpoint);
-              resolve(null);
-            }
+            try {
+                const data = session.send_and_read_finish(res);
+                if (data) {
+                  const text = this._decoder.decode(data.toArray());
+                  // Minimal diagnostic: log non-empty responses length for debugging
+                  try {
+                    const json = JSON.parse(text);
+                    resolve(json);
+                  } catch (e) {
+                    logErr(e, "SportradarClient: Failed to parse response");
+                    try {
+                      console.warn(`SportradarClient: response parse failed for ${endpoint}; length=${text.length}`);
+                      // Log a truncated preview of the raw response to help debugging (first 1024 chars)
+                      const preview = text.substring(0, 1024).replace(/\s+/g, ' ').trim();
+                      console.warn(`SportradarClient: response preview for ${endpoint}: ${preview}`);
+                    } catch (__) {}
+                    resolve(null);
+                  }
+                } else {
+                  try { console.warn(`SportradarClient: empty response for ${endpoint}`); } catch (__) {}
+                  resolve(null);
+                }
           } catch (error) {
             logErr(error, "SportradarClient: Error in request for " + endpoint);
+            try { console.warn(`SportradarClient: request error for ${endpoint}: ${error}`); } catch (__) {}
             resolve(null);
           }
         }
@@ -63,15 +72,12 @@ export class SportradarClient {
    * Fetch all competitions
    */
   async getCompetitions(locale = "en") {
-    logInfo("SportradarClient: Fetching competitions");
     const response = await this.request(`${locale}/competitions.json`);
     
     if (response && Array.isArray(response.competitions)) {
-      logInfo("SportradarClient: Got", response.competitions.length, "competitions");
       return response.competitions;
     }
     
-    logInfo("SportradarClient: Failed to fetch competitions");
     return [];
   }
 
@@ -79,15 +85,12 @@ export class SportradarClient {
    * Fetch seasons for a competition
    */
   async getSeasonsForCompetition(competitionId, locale = "en") {
-    logInfo("SportradarClient: Fetching seasons for competition", competitionId);
     const response = await this.request(`${locale}/competitions/${competitionId}/seasons.json`);
     
     if (response && Array.isArray(response.seasons)) {
-      logInfo("SportradarClient: Got", response.seasons.length, "seasons for", competitionId);
       return response.seasons;
     }
     
-    logInfo("SportradarClient: Failed to fetch seasons for", competitionId);
     return [];
   }
 
@@ -95,15 +98,12 @@ export class SportradarClient {
    * Fetch competitors (teams) for a season
    */
   async getCompetitorsForSeason(seasonId, locale = "en") {
-    logInfo("SportradarClient: Fetching competitors for season", seasonId);
     const response = await this.request(`${locale}/seasons/${seasonId}/competitors.json`);
     
     if (response && Array.isArray(response.season_competitors)) {
-      logInfo("SportradarClient: Got", response.season_competitors.length, "competitors for", seasonId);
       return response.season_competitors;
     }
     
-    logInfo("SportradarClient: Failed to fetch competitors for", seasonId);
     return [];
   }
 
@@ -111,27 +111,22 @@ export class SportradarClient {
    * Fetch competition info including teams
    */
   async getCompetitionInfo(competitionId, locale = "en") {
-    logInfo("SportradarClient: Fetching competition info for", competitionId);
     
     // Get seasons for this competition
     const seasons = await this.getSeasonsForCompetition(competitionId, locale);
     if (seasons.length === 0) {
-      logInfo("SportradarClient: No seasons found for", competitionId);
       return null;
     }
     
     // Find the current season (latest by start_date)
     const currentSeason = seasons.sort((a, b) => new Date(b.start_date) - new Date(a.start_date))[0];
-    logInfo("SportradarClient: Using season", currentSeason.id, "for", competitionId);
     
     // Get competitors for the current season
     const competitors = await this.getCompetitorsForSeason(currentSeason.id, locale);
     if (competitors.length === 0) {
-      logInfo("SportradarClient: No competitors found for season", currentSeason.id);
       return null;
     }
     
-    logInfo("SportradarClient: Got", competitors.length, "teams for", competitionId);
     return { season: { competitors: competitors } };
   }
 
@@ -139,11 +134,9 @@ export class SportradarClient {
    * Fetch schedules (previous and upcoming) for a competitor
    */
   async getCompetitorSchedules(competitorId, locale = "en") {
-    logInfo("SportradarClient: Fetching schedules for competitor", competitorId);
     const response = await this.request(`${locale}/competitors/${competitorId}/schedules.json`);
 
     if (!response) {
-      logInfo("SportradarClient: No schedule response for", competitorId);
       return [];
     }
 

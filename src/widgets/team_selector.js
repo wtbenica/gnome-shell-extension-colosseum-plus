@@ -5,7 +5,7 @@ import St from "gi://St";
 import Gio from "gi://Gio";
 import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
 
-import { logInfo, logErr } from "../logging/error_utils.js";
+import { logErr } from "../logging/error_utils.js";
 
 export const TeamSelectorDialog = GObject.registerClass(
   class TeamSelectorDialog extends ModalDialog.ModalDialog {
@@ -55,19 +55,15 @@ export const TeamSelectorDialog = GObject.registerClass(
     async _populateTeamSelector() {
       const startTime = Date.now();
       try {
-        logInfo('TeamSelector: Starting to populate team selector at', startTime);
         this._contentBox.destroy_all_children();
 
         // Fetch competitions from Sportradar (filtered to 4 leagues)
         const DataLoader = (await import('../data.js')).default;
         const t1 = Date.now();
-        logInfo('TeamSelector: Fetching competitions from DataLoader at', t1);
         const competitions = await DataLoader.fetchCompetitions();
         const t2 = Date.now();
-        logInfo('TeamSelector: fetchCompetitions returned', competitions ? competitions.length : 0, 'items in', (t2 - t1), 'ms');
 
         if (!competitions || competitions.length === 0) {
-          logInfo('TeamSelector: No competitions available');
           let noLeaguesLabel = new St.Label({
             text: 'No competitions available. Data may still be loading.',
             style_class: 'no-teams-label',
@@ -87,7 +83,6 @@ export const TeamSelectorDialog = GObject.registerClass(
         } catch (e) {
           // ignore and use fallback
         }
-        logInfo('TeamSelector: resolved accentColor =', accentColor);
         let totalCollected = 0;
 
         for (const comp of competitions) {
@@ -104,10 +99,8 @@ export const TeamSelectorDialog = GObject.registerClass(
           this._contentBox.add_child(leagueContainer);
 
           const tCompStart = Date.now();
-          logInfo('TeamSelector: Fetching teams for', comp.name, '(', comp.id, ') at', tCompStart);
           const teams = await DataLoader.fetchCompetitionInfo(comp.id);
           const tCompEnd = Date.now();
-          logInfo('TeamSelector: fetchCompetitionInfo for', comp.id, 'returned', teams ? teams.length : 0, 'teams in', (tCompEnd - tCompStart), 'ms');
 
           if (teams && teams.length > 0) {
             teams.forEach(team => (team.leagueName = comp.name));
@@ -122,11 +115,9 @@ export const TeamSelectorDialog = GObject.registerClass(
           } else {
             // Update the status label to indicate no teams are available
             statusLabel.set_text(comp._placeholder ? 'Not cached' : 'No teams available');
-            logInfo('TeamSelector: No teams found for', comp.name);
           }
         }
 
-        logInfo('TeamSelector: Total teams collected across competitions:', totalCollected);
       } catch (error) {
         logErr(error, 'TeamSelector: Failed to populate team selector');
         this._contentBox.destroy_all_children();
@@ -139,7 +130,6 @@ export const TeamSelectorDialog = GObject.registerClass(
     }
 
   _renderTeamsBatched(allTeams, followedTeams, accentColor) {
-      logInfo('TeamSelector: Starting batched render of', allTeams.length, 'teams');
       this._batchIndex = 0;
       this._allTeams = allTeams;
       this._followedCache = new Set(followedTeams || []);
@@ -195,7 +185,6 @@ export const TeamSelectorDialog = GObject.registerClass(
               teamLabel.remove_style_class_name('team--followed');
               try { teamLabel.set_style(''); } catch (e) { }
               try { teamBox.remove_style_class_name('team--followed'); } catch (e) { }
-              logInfo('TeamSelector: Unfollowed team:', team.name);
             } else {
               currentFollowed.push(teamId);
               teamSwitch.add_style_class_name('team-selector-switch-active');
@@ -205,7 +194,6 @@ export const TeamSelectorDialog = GObject.registerClass(
                 if (accentColor) teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
               } catch (e) { }
               try { teamBox.add_style_class_name('team--followed'); } catch (e) { }
-              logInfo('TeamSelector: Followed team:', team.name);
             }
             this._settings.set_strv('followed-teams', currentFollowed);
           });
@@ -219,7 +207,6 @@ export const TeamSelectorDialog = GObject.registerClass(
         }
 
         const end = Date.now();
-        logInfo('TeamSelector: Batch processed', processed, 'teams in', (end - start), 'ms; overall progress', this._batchIndex, '/', this._allTeams.length);
 
         if (this._batchIndex < this._allTeams.length) {
           GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
@@ -227,7 +214,6 @@ export const TeamSelectorDialog = GObject.registerClass(
             return GLib.SOURCE_REMOVE;
           });
         } else {
-          logInfo('TeamSelector: Batched rendering complete');
         }
       };
 
@@ -239,7 +225,6 @@ export const TeamSelectorDialog = GObject.registerClass(
     }
 
     _renderTeamsBatchedForLeague(teams, leagueName, followedTeams, container, accentColor) {
-      logInfo('TeamSelector: Starting batched render for league', leagueName, teams.length, 'teams');
       let batchIndex = 0;
       const batchSize = 12; // per-league batch size
       const followedCache = new Set(followedTeams || []);
@@ -270,12 +255,10 @@ export const TeamSelectorDialog = GObject.registerClass(
             // If an accent color was provided, apply it inline for immediate visual feedback
             try {
               if (accentColor) {
-                logInfo('TeamSelector: applying inline accent color', accentColor, 'to', team.name);
                 teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
               }
             } catch (e) {
               // If set_style isn't available or fails, fall back to the CSS class only
-              logInfo('TeamSelector: set_style failed for', team.name, e && e.message);
             }
             try { teamBox.add_style_class_name('team--followed'); } catch (e) { }
           }
@@ -297,7 +280,6 @@ export const TeamSelectorDialog = GObject.registerClass(
               teamLabel.remove_style_class_name('team--followed');
               try { teamLabel.set_style(''); } catch (e) { }
               try { teamBox.remove_style_class_name('team--followed'); } catch (e) { }
-              logInfo('TeamSelector: Unfollowed team:', team.name);
             } else {
               currentFollowed.push(teamId);
               teamSwitch.add_style_class_name('team-selector-switch-active');
@@ -308,7 +290,6 @@ export const TeamSelectorDialog = GObject.registerClass(
                 if (accentColor) teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
               } catch (e) {}
               try { teamBox.add_style_class_name('team--followed'); } catch (e) {}
-              logInfo('TeamSelector: Followed team:', team.name);
             }
             this._settings.set_strv('followed-teams', currentFollowed);
           });
@@ -322,7 +303,6 @@ export const TeamSelectorDialog = GObject.registerClass(
         }
 
         const end = Date.now();
-        logInfo('TeamSelector:', leagueName, 'batch processed', processed, 'teams in', (end - start), 'ms; overall progress', batchIndex, '/', teams.length);
 
         if (batchIndex < teams.length) {
           GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
@@ -330,7 +310,6 @@ export const TeamSelectorDialog = GObject.registerClass(
             return GLib.SOURCE_REMOVE;
           });
         } else {
-          logInfo('TeamSelector: Batched rendering complete for league', leagueName);
         }
       };
 

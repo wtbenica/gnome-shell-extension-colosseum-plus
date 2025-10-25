@@ -1,7 +1,7 @@
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 
-import { logInfo, logErr } from "./logging/error_utils.js";
+import { logErr } from "./logging/error_utils.js";
 
 const CACHE_FILE = GLib.get_user_cache_dir() + '/colosseum-data.json';
 const CACHE_DURATION_DAYS = 30;
@@ -19,23 +19,20 @@ export class CacheManager {
    * Load cache from disk
    */
   load() {
-    logInfo('CacheManager: Loading cache from', CACHE_FILE);
     
     try {
       const cacheFile = Gio.File.new_for_path(CACHE_FILE);
       
       if (cacheFile.query_exists(null)) {
-        logInfo('CacheManager: Cache file exists, loading...');
         const [success, contents] = cacheFile.load_contents(null);
         
         if (success) {
           const text = this._decoder.decode(contents);
           const parsed = JSON.parse(text);
           
-          logInfo('CacheManager: Cache loaded -',
             'leagues:', parsed.leagues?.length || 0,
             'rawCompetitions:', parsed.rawCompetitions?.length || 0,
-            'teams:', Object.keys(parsed.teams || {}).length);
+            'teams:', Object.keys(parsed.teams || {}).length;
           
           // Handle legacy cache shape: some older saves stored competitions in `teams` by mistake.
           // If rawCompetitions is empty but teams is an array of competition-like objects,
@@ -44,7 +41,6 @@ export class CacheManager {
             if ((!parsed.rawCompetitions || parsed.rawCompetitions.length === 0) && Array.isArray(parsed.teams) && parsed.teams.length > 0) {
               const first = parsed.teams[0];
               if (first && first.id && first.category) {
-                logInfo('CacheManager: Detected legacy cache shape, migrating stored competitions into rawCompetitions');
                 parsed.rawCompetitions = parsed.teams;
                 parsed.teams = {};
               }
@@ -55,16 +51,13 @@ export class CacheManager {
 
           return parsed;
         } else {
-          logInfo('CacheManager: Failed to load cache file contents');
         }
       } else {
-        logInfo('CacheManager: Cache file does not exist');
       }
     } catch (error) {
       logErr(error, 'CacheManager: Failed to load cache');
     }
     
-    logInfo('CacheManager: Returning empty cache');
     return {
       lastUpdate: 0,
       leagues: [],
@@ -100,9 +93,7 @@ export class CacheManager {
       );
       
       if (!success) {
-        logInfo('CacheManager: Failed to save cache');
       } else {
-        logInfo('CacheManager: Cache saved successfully');
       }
     } catch (error) {
       logErr(error, 'CacheManager: Failed to save cache');

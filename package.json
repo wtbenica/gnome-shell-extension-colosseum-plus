@@ -1,0 +1,7 @@
+{
+  "name": "gnome-shell-extension-colosseum",
+  "packageManager": "yarn@4.10.3",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

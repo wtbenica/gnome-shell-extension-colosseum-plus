@@ -10,7 +10,7 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 
 import * as CONSTANTS from "../const.js";
-import { logInfo } from "../logging/error_utils.js";
+
 
 import ColosseumClient from "../client.js";
 import { GameLink } from "./game_link.js";
@@ -26,8 +26,12 @@ export const Colosseum = GObject.registerClass(
 
       this._scores = [];
       this._nextGames = [];
+  this._nextGamesMissingApiKey = false;
       this._timeout = null;
       this._settings = null;
+    // In-memory cache for competitor schedules to avoid repeated API calls during a session
+    // Map: teamId -> { ts: <Date.now()>, events: [...] }
+    this._scheduleCache = new Map();
 
   // Make the panel box reactive so clicks are handled correctly by the parent PanelMenu.Button
   // Keep track_hover false to avoid hover highlighting; visual hover is suppressed in stylesheet.
@@ -60,28 +64,27 @@ export const Colosseum = GObject.registerClass(
     setSettings(settings, constants) {
       this._settings = settings;
       this._constants = constants;
-      logInfo('Colosseum: Connecting settings signals...');
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_POSITION_TOPBAR,
-        () => { logInfo('Colosseum: PREF_POSITION_TOPBAR changed'); this._updatePositionInPanel(); }
+  () => { this._updatePositionInPanel(); }
       );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_FOLLOWED_ONLY,
-        () => { logInfo('Colosseum: PREF_FOLLOWED_ONLY changed'); this._update(); }
+  () => { this._update(); }
       );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_COMPACT_MODE,
-        () => { logInfo('Colosseum: PREF_COMPACT_MODE changed'); this._update(); }
+  () => { this._update(); }
       );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_SHOW_NEXT_GAMES,
-        () => { logInfo('Colosseum: PREF_SHOW_NEXT_GAMES changed'); this._update(); }
+  () => { this._update(); }
       );
 
       // Listen for changes to followed teams and update upcoming games immediately
       this._settings.connect(
         "changed::followed-teams",
-        () => { logInfo('Colosseum: followed-teams changed'); this._update(); }
+  () => { this._update(); }
       );
 
       this._client = new ColosseumClient(this._constants, this._settings);
@@ -103,6 +106,26 @@ export const Colosseum = GObject.registerClass(
 
         grid.attach(leagueName, 0, offset, 3, 1);
         offset = offset + 1;
+      }
+
+      // determine accent color for followed teams (match team selector)
+      let accentColor = '#ffd966';
+      try {
+        const ifaceSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
+        const ac = ifaceSettings.get_string('accent-color');
+        if (ac) accentColor = ac;
+      } catch (e) {
+        // ignore and fall back to stylesheet color
+      }
+
+      // get followed teams for this league (if provided) so we can style them
+      let followedIds = [];
+      try {
+        if (league && this._client && typeof this._client.getFollowedTeams === 'function') {
+          followedIds = this._client.getFollowedTeams(league) || [];
+        }
+      } catch (e) {
+        followedIds = [];
       }
 
       let pos;
@@ -132,12 +155,20 @@ export const Colosseum = GObject.registerClass(
             ? "--loser"
             : "";
 
+        const homeFollowed = followedIds.indexOf(String(games[j].home.id)) >= 0;
+
         let homeLabel = new St.Label({
           text: games[j].home.team,
-          style_class: "team" + homeSuffix,
+          style_class: "team" + homeSuffix + (homeFollowed ? " team--followed" : ""),
           y_expand: true,
           y_align: Clutter.ActorAlign.CENTER,
         });
+
+        if (homeFollowed) {
+          try { homeLabel.add_style_class_name('team--followed'); } catch (e) {}
+          try { if (accentColor) homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
+          try { log && log(`Colosseum: styled followed HOME team: ${games[j].home.team} (id=${games[j].home.id})`); } catch (e) { try { console.log(`Colosseum: styled followed HOME team: ${games[j].home.team} (id=${games[j].home.id})`); } catch (__) {} }
+        }
 
         let homeScore = new St.Label({
           text: games[j].home.score,
@@ -157,12 +188,20 @@ export const Colosseum = GObject.registerClass(
         grid.attach(homeScore, 1, homeRow, 1, 1);
         grid.attach(gameMeta, 2, homeRow, 1, 1);
 
+        const awayFollowed = followedIds.indexOf(String(games[j].away.id)) >= 0;
+
         let awayLabel = new St.Label({
           text: games[j].away.team,
-          style_class: "team" + awaySuffix,
+          style_class: "team" + awaySuffix + (awayFollowed ? " team--followed" : ""),
           y_expand: true,
           y_align: Clutter.ActorAlign.CENTER,
         });
+
+        if (awayFollowed) {
+          try { awayLabel.add_style_class_name('team--followed'); } catch (e) {}
+          try { if (accentColor) awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
+          try { log && log(`Colosseum: styled followed AWAY team: ${games[j].away.team} (id=${games[j].away.id})`); } catch (e) { try { console.log(`Colosseum: styled followed AWAY team: ${games[j].away.team} (id=${games[j].away.id})`); } catch (__) {} }
+        }
 
         let awayScore = new St.Label({
           text: games[j].away.score,
@@ -210,6 +249,7 @@ export const Colosseum = GObject.registerClass(
     }
 
     _createMenu() {
+      try { if (typeof log === 'function') log('Colosseum: _createMenu() called'); else console.log('Colosseum: _createMenu() called'); } catch (e) {}
       let menus = [];
 
       // Add Configure Teams menu item at the top
@@ -232,7 +272,36 @@ export const Colosseum = GObject.registerClass(
 
       // Helper to push games with league and followed info
       const pushGames = (leagueName, games) => {
-        const followedIds = this._client.getFollowedTeams(leagueName);
+        let followedIds = [];
+        try {
+          if (this._client && typeof this._client.getFollowedTeams === 'function') {
+            followedIds = this._client.getFollowedTeams(leagueName) || [];
+          }
+        } catch (e) {
+          followedIds = [];
+        }
+
+        // If there are no league-scoped followed IDs (e.g., Next Games), fall back to global followed-teams setting
+        if ((!followedIds || followedIds.length === 0) && this._settings) {
+          try {
+            const globalFollowed = this._settings.get_strv('followed-teams') || [];
+            if (globalFollowed && globalFollowed.length > 0) {
+              followedIds = globalFollowed;
+              try { if (typeof log === 'function') log(`Colosseum: pushGames fallback to global followed-teams for league="${leagueName}"`); } catch (__) {}
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        try {
+          if (typeof log === 'function') {
+            log(`Colosseum: pushGames called for league="${leagueName}" followedIds=[${followedIds}]`);
+          } else {
+            console.log(`Colosseum: pushGames called for league="${leagueName}" followedIds=[${followedIds}]`);
+          }
+        } catch (e) {}
+
         for (let g of games) {
           // mark whether each team is followed
           g._league = leagueName;
@@ -282,6 +351,26 @@ export const Colosseum = GObject.registerClass(
         }
       }
 
+      // Debug: dump followed-teams setting and flattened allGames entries so we can trace ID matching
+      try {
+        let followedSetting = [];
+        try { followedSetting = this._settings.get_strv('followed-teams') || []; } catch (e) { followedSetting = []; }
+        if (typeof log === 'function') {
+          log(`Colosseum: followed-teams setting = [${followedSetting}]`);
+          log(`Colosseum: flattened allGames count = ${allGames.length}`);
+        } else {
+          console.log(`Colosseum: followed-teams setting = [${followedSetting}]`);
+          console.log(`Colosseum: flattened allGames count = ${allGames.length}`);
+        }
+        for (let i = 0; i < allGames.length; i++) {
+          const gg = allGames[i];
+          const msg = `Colosseum: allGames[${i}] league=${gg._league} ts=${gg.timestamp} home=${gg.home.team}(id=${gg.home.id}) homeFollowed=${gg._homeFollowed} away=${gg.away.team}(id=${gg.away.id}) awayFollowed=${gg._awayFollowed}`;
+          if (typeof log === 'function') log(msg); else console.log(msg);
+        }
+      } catch (e) {
+        try { console.error('Colosseum: failed to dump debug info', e); } catch (__) {}
+      }
+
       // If compact content exists, add it first as before
       if (HAS_COMPACT) {
         const baseMenuItem = new PopupMenu.PopupBaseMenuItem({
@@ -322,8 +411,13 @@ export const Colosseum = GObject.registerClass(
             activate: false,
           });
 
+          let placeholderText = "No upcoming games";
+          if (this._nextGamesMissingApiKey) {
+            placeholderText = "No upcoming games — missing SPORT_RADAR_KEY (.env). Open extension prefs to add it.";
+          }
+
           let placeholder = new St.Label({
-            text: "No upcoming games",
+            text: placeholderText,
             y_align: Clutter.ActorAlign.CENTER,
           });
 
@@ -340,6 +434,15 @@ export const Colosseum = GObject.registerClass(
 
       // Render games grouped by date using vertical BoxLayout of horizontal rows
       let currentDay = null;
+      // determine accent color like the team selector so followed teams have the same inline color
+      let accentColor = '#ffd966';
+      try {
+        const ifaceSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
+        const ac = ifaceSettings.get_string('accent-color');
+        if (ac) accentColor = ac;
+      } catch (e) {
+        // ignore and fall back to stylesheet color
+      }
 
       let groupBox = new St.BoxLayout({
         style_class: "scoreboard",
@@ -385,6 +488,11 @@ export const Colosseum = GObject.registerClass(
           y_align: Clutter.ActorAlign.CENTER,
         });
 
+        if (g._homeFollowed) {
+          try { homeLabel.add_style_class_name('team--followed'); } catch (e) {}
+          try { if (accentColor) homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
+        }
+
         let homeScore = new St.Label({
           text: g.home.score,
           style_class: "score" + homeSuffix,
@@ -410,6 +518,11 @@ export const Colosseum = GObject.registerClass(
           style_class: "team" + awaySuffix + (g._awayFollowed ? " team--followed" : ""),
           y_align: Clutter.ActorAlign.CENTER,
         });
+
+        if (g._awayFollowed) {
+          try { awayLabel.add_style_class_name('team--followed'); } catch (e) {}
+          try { if (accentColor) awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
+        }
 
         let awayScore = new St.Label({
           text: g.away.score,
@@ -461,45 +574,77 @@ export const Colosseum = GObject.registerClass(
     }
 
     async _update() {
-      logInfo('Colosseum: Starting _update...');
+      try { if (typeof log === 'function') log('Colosseum: _update() called'); else console.log('Colosseum: _update() called'); } catch (e) {}
       await this._loadData();
-      logInfo('Colosseum: Data loaded, creating menu...');
       let menus = this._createMenu();
-      logInfo('Colosseum: Menu created with ' + menus.length + ' items');
       this.menu.removeAll();
 
       for (let i = 0; i < menus.length; i++) {
         this.menu.addMenuItem(menus[i]);
       }
 
-      logInfo('Colosseum: Setting top bar text...');
       this._setTopBarText();
-      logInfo('Colosseum: Top bar text set');
 
       // Removed periodic updates to disable live monitoring
-      logInfo('Colosseum: Update complete, no periodic updates');
     }
 
     async _loadData() {
       const tLoadStart = Date.now();
-      logInfo('Colosseum: Loading scores at ' + tLoadStart);
       this._scores = await this._client.getScores();
-      logInfo('Colosseum: Scores loaded: ' + this._scores.length + ' leagues in ' + (Date.now() - tLoadStart) + ' ms');
       if (this._client.isShowNextGamesEnabled()) {
         const tNextGamesStart = Date.now();
-        logInfo('Colosseum: Loading next games (Sportradar competitor schedules) at ' + tNextGamesStart);
         // Build next games from followed teams using DataLoader + Sportradar competitor schedules
         try {
           const DataLoader = (await import('../data.js')).default;
+          // Track whether the Sportradar API key is present so we can show a helpful hint
+          try {
+            this._nextGamesMissingApiKey = !DataLoader.sportradarClient || !DataLoader.sportradarClient.apiKey;
+            if (this._nextGamesMissingApiKey) {
+              try { console.warn('Colosseum: SPORT_RADAR_KEY is missing; Next Games will be disabled until you add it to .env'); } catch (__) {}
+            }
+          } catch (e) {
+            this._nextGamesMissingApiKey = false;
+          }
           const followed = this._settings.get_strv('followed-teams') || [];
           const eventsByLeague = new Map();
           const seenEvents = new Set();
 
           for (const teamId of followed) {
             const tTeamStart = Date.now();
-            logInfo('Colosseum: Fetching competitor schedules for team ' + teamId + ' at ' + tTeamStart);
-            const teamEvents = await DataLoader.fetchCompetitorSchedules(teamId, 7);
-            logInfo('Colosseum: Team ' + teamId + ' schedules loaded in ' + (Date.now() - tTeamStart) + ' ms');
+            // Diagnostic: log which teamId we're fetching schedules for
+            try {
+              log(`Colosseum: fetching schedules for team ${teamId}`);
+            } catch (e) {
+              // fallback to console if log isn't available
+              try { console.log(`Colosseum: fetching schedules for team ${teamId}`); } catch (__) {}
+            }
+
+
+            // Try to use cached schedules when available to reduce API calls
+            const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+            let teamEvents = [];
+            try {
+              const cached = this._scheduleCache.get(teamId);
+              if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+                teamEvents = cached.events;
+                try { if (typeof log === 'function') log(`Colosseum: schedule cache HIT for ${teamId}`); } catch (__) {}
+              } else {
+                try { if (typeof log === 'function') log(`Colosseum: schedule cache MISS for ${teamId}`); } catch (__) {}
+                teamEvents = await DataLoader.fetchCompetitorSchedules(teamId, 7);
+                // store in cache
+                try { this._scheduleCache.set(teamId, { ts: Date.now(), events: teamEvents }); } catch (__) {}
+              }
+            } catch (e) {
+              // On any cache or fetch error, fall back to direct fetch
+              try { teamEvents = await DataLoader.fetchCompetitorSchedules(teamId, 7); } catch (__) { teamEvents = []; }
+            }
+
+            // Diagnostic: log how many events were returned for this team
+            try {
+              log(`Colosseum: received ${teamEvents.length} events for team ${teamId}`);
+            } catch (e) {
+              try { console.log(`Colosseum: received ${teamEvents.length} events for team ${teamId}`); } catch (__) {}
+            }
             for (const ev of teamEvents) {
               // use timestamp + team names to dedupe
               const key = `${ev.timestamp}-${ev.home.team}-${ev.away.team}`;
@@ -514,7 +659,6 @@ export const Colosseum = GObject.registerClass(
 
           // convert map to array
           this._nextGames = Array.from(eventsByLeague.values());
-          logInfo('Colosseum: Next games loaded (from followed teams): ' + this._nextGames.length + ' leagues in ' + (Date.now() - tNextGamesStart) + ' ms');
         } catch (e) {
           console.error('Colosseum: Failed to load next games from DataLoader, falling back to league-based', e);
           this._nextGames = await this._client.getNextGames();

@@ -1,0 +1,300 @@
+.scoreboard .team {
+	width: 130px;
+}
+
+.scoreboard .team--winner {
+	width: 130px;
+	font-weight: bold;
+}
+
+.scoreboard .team--loser {
+	width: 130px;
+    color: rgba(255, 255, 255, 0.70);
+}
+
+.scoreboard .score {
+	width: 50px;
+	text-align: right;
+}
+
+.scoreboard .score--winner {
+	width: 50px;
+	text-align: right;
+	font-weight: bold;
+}
+
+.scoreboard .score--loser {
+	width: 50px;
+	text-align: right;
+    color: rgba(255, 255, 255, 0.70);
+}
+
+.scoreboard .meta {
+	width: 90px;
+	text-align: right;
+}
+
+.scoreboard .divider {
+	background-color: rgba(255, 255, 255, 0.1);
+	height: 1px;
+	margin: 3px 0px;
+}
+
+.scoreBoardPanel {
+	width: 295px;
+}
+
+.scoreboard .team--followed {
+	font-weight: 700;
+}
+
+.scoreboard .date-header {
+	font-weight: 600;
+	padding: 4px 0px;
+	text-align: center;
+}
+
+/* Ensure rows align: make row children use fixed widths */
+.scoreboard .score-row .team,
+.scoreboard .date-box .date-header,
+.scoreboard .score-row .team--winner,
+.scoreboard .score-row .team--loser,
+.scoreboard .score-row .team--followed {
+	width: 130px;
+	min-width: 130px;
+}
+
+.scoreboard .score-row .score,
+.scoreboard .score-row .score--winner,
+.scoreboard .score-row .score--loser {
+	width: 50px;
+	min-width: 50px;
+	text-align: right;
+}
+
+.scoreboard .score-row .meta {
+	width: 90px;
+	min-width: 90px;
+	text-align: right;
+}
+
+/* Make visit/link use the same alignment/width as the meta/time column */
+.scoreboard .shell-link,
+.scoreboard .score-row .shell-link {
+	width: 90px;
+	min-width: 90px;
+	text-align: right;
+}
+
+/* Stronger visual for followed teams */
+.scoreboard .team--followed {
+	font-weight: 800;
+	color: #ffd966; /* warm highlight color */
+}
+
+/* Center date header across the full menu width */
+.scoreboard .date-box {
+	width: 295px;
+	display: block;
+}
+.scoreboard .date-header {
+	text-align: center;
+	width: 100%;
+}
+
+/* Prevent the panel button area from changing appearance on hover */
+.panel-button .colosseum,
+.panel-button .colosseum:hover,
+.panel-button.colosseum {
+	background-color: transparent;
+}
+
+/* Small layout helpers for boxes */
+.scoreboard .date-box {
+	padding: 4px 0px;
+}
+.scoreboard .divider-box {
+	padding: 2px 0px;
+}
+
+/* Team selection submenu styles */
+.league-header {
+	font-weight: bold;
+	font-size: 1.1em;
+	padding: 8px 0px 4px 0px;
+	color: #ffffff;
+	text-align: center;
+}
+
+.league-header:first-child {
+	padding-top: 4px;
+}
+
+/* Style for team selection switches */
+.popup-menu-item .popup-switch-menu-item {
+	padding: 2px 8px;
+}
+
+.popup-menu-item .popup-switch-menu-item StLabel {
+	font-size: 0.9em;
+	padding-left: 8px;
+}
+
+/* Team selector dialog styles */
+.team-selector-dialog {
+	min-width: 600px;
+	max-width: 800px;
+}
+
+.team-selector-title {
+	font-size: 1.3em;
+	font-weight: bold;
+	padding: 12px;
+	text-align: center;
+}
+
+.team-selector-scroll {
+	max-height: 500px;
+	min-height: 300px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 8px;
+	margin: 12px;
+}
+
+.team-selector-content {
+	padding: 12px;
+	spacing: 4px;
+}
+
+.team-selector-search {
+	padding: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	border-radius: 4px;
+	background-color: rgba(0, 0, 0, 0.2);
+	color: #ffffff;
+	margin-bottom: 8px;
+}
+
+.team-selector-country-header {
+	padding: 8px 12px;
+	border-radius: 4px;
+	background-color: rgba(74, 158, 255, 0.2);
+	border: 1px solid rgba(74, 158, 255, 0.3);
+	color: #ffffff;
+	font-weight: bold;
+	text-align: left;
+	margin: 2px 0px;
+}
+
+.team-selector-country-header:hover {
+	background-color: rgba(74, 158, 255, 0.3);
+}
+
+.team-selector-comps-container {
+	padding-left: 12px;
+	spacing: 2px;
+	margin-bottom: 4px;
+}
+
+.team-selector-comp-row {
+	padding: 4px 8px;
+	border-radius: 4px;
+	background-color: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	margin: 1px 0px;
+}
+
+.team-selector-comp-button {
+	padding: 6px 12px;
+	color: #ffffff;
+	text-align: left;
+	font-size: 0.9em;
+}
+
+.team-selector-comp-button:hover {
+	background-color: rgba(255, 255, 255, 0.1);
+}
+
+.team-selector-teams-container {
+	padding-left: 24px;
+	spacing: 2px;
+	margin-bottom: 4px;
+}
+
+.team-selector-team-row {
+	padding: 4px 8px;
+	border-radius: 4px;
+	background-color: rgba(255, 255, 255, 0.03);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	margin: 1px 0px;
+}
+
+.team-selector-team-label {
+	font-size: 0.9em;
+	color: #ffffff;
+	padding: 4px 0px;
+}
+
+/* Ensure followed teams in the team selector get the same highlight as the scoreboard */
+.team-selector-team-label.team--followed {
+    font-weight: 800;
+    color: #ffd966; /* fallback accent color; will be overridden by inline style if available */
+}
+
+/* Stronger selector: highlight the label when the row is marked followed */
+.team-selector-team-row.team--followed .team-selector-team-label {
+	font-weight: 800;
+	color: #ffd966;
+}
+
+/* Expand scope: if the league container marks children, ensure label receives highlight */
+.team-selector-league-container .team-selector-team-label.team--followed {
+	font-weight: 800;
+	color: #ffd966;
+}
+
+.team-selector-switch {
+	min-width: 30px;
+	min-height: 20px;
+	border-radius: 10px;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	background-color: rgba(0, 0, 0, 0.2);
+	padding: 2px 6px;
+	font-size: 0.8em;
+	color: rgba(255, 255, 255, 0.5);
+	text-align: center;
+}
+
+.team-selector-switch:hover {
+	background-color: rgba(0, 0, 0, 0.3);
+	border-color: rgba(255, 255, 255, 0.4);
+}
+
+.team-selector-switch-active {
+	background-color: rgba(74, 158, 255, 0.5);
+	border-color: #4a9eff;
+	color: #ffffff;
+	font-weight: bold;
+}
+
+.team-selector-loading {
+	padding: 8px;
+	color: rgba(255, 255, 255, 0.7);
+	font-style: italic;
+}
+
+.no-teams-label {
+	padding: 20px;
+	text-align: center;
+	color: rgba(255, 255, 255, 0.7);
+	font-style: italic;
+}
+
+.team-selector-league-header {
+	font-weight: bold;
+	font-size: 1.1em;
+	padding: 8px 0px 4px 0px;
+	color: #ffffff;
+	text-align: center;
+	margin-top: 10px;
+}

@@ -2,3 +2,5 @@
 .github/ideas.md
 *.zip
 .env
+dist/
+node_modules/

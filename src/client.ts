@@ -1,26 +1,42 @@
-// Lightweight adapter that uses extension constants/settings only.
-// Lightweight adapter for settings-driven helpers. Score fetching is now handled via Sportradar DataLoader elsewhere in the codebase.
+// TypeScript version of ColosseumClient
+
+export interface ColosseumConstants {
+  PREF_LEAGUES: Record<string, string>;
+  PREF_TOURNAMENTS: Record<string, string>;
+  SPORTS: Record<string, Array<{ id: number; name: string; league?: string }>>;
+  PREF_FOLLOWED_ONLY: string;
+  PREF_SHOW_NEXT_GAMES: string;
+}
+
+export interface Settings {
+  get_boolean(key: string): boolean;
+  get_strv(key: string): string[];
+  get_int?(key: string): number;
+}
 
 export default class ColosseumClient {
-  constructor(constants, settings) {
+  private _CONSTANTS: ColosseumConstants;
+  private _settings: Settings;
+  private _leagues: string[];
+  private _tournaments: string[];
+
+  constructor(constants: ColosseumConstants, settings: Settings) {
     this._CONSTANTS = constants;
     this._settings = settings;
     this._leagues = Object.keys(this._CONSTANTS.PREF_LEAGUES || {});
     this._tournaments = Object.keys(this._CONSTANTS.PREF_TOURNAMENTS || {});
   }
 
-  // Previously performed network calls; now replaced by Sportradar-backed DataLoader. Method kept for compatibility.
-  async getScores() {
+  async getScores(): Promise<any[]> {
     return [];
   }
 
-  // Next-games are now assembled by the main widget using DataLoader/Sportradar.
-  async getNextGames() {
+  async getNextGames(): Promise<any[]> {
     return [];
   }
 
-  getEnabledLeagues() {
-    const leagues = [];
+  getEnabledLeagues(): string[] {
+    const leagues: string[] = [];
     for (let i = 0; i < this._leagues.length; i++) {
       if (this._settings.get_boolean(this._CONSTANTS.PREF_LEAGUES[this._leagues[i]])) {
         leagues.push(this._leagues[i]);
@@ -29,8 +45,8 @@ export default class ColosseumClient {
     return leagues;
   }
 
-  getEnabledTournaments() {
-    const tournaments = [];
+  getEnabledTournaments(): string[] {
+    const tournaments: string[] = [];
     for (let i = 0; i < this._tournaments.length; i++) {
       if (this._settings.get_boolean(this._CONSTANTS.PREF_TOURNAMENTS[this._tournaments[i]])) {
         tournaments.push(this._tournaments[i]);
@@ -39,7 +55,7 @@ export default class ColosseumClient {
     return tournaments;
   }
 
-  getFollowedTeams(league) {
+  getFollowedTeams(league: string): string[] {
     const followedTeams = this._settings.get_strv('followed-teams') || [];
     const leagueTeams = this._CONSTANTS.SPORTS[league] || [];
     return leagueTeams
@@ -47,17 +63,17 @@ export default class ColosseumClient {
       .map(team => String(team.id));
   }
 
-  isFollowOnlyEnabled() {
+  isFollowOnlyEnabled(): boolean {
     return this._settings.get_boolean(this._CONSTANTS.PREF_FOLLOWED_ONLY);
   }
 
-  isShowNextGamesEnabled() {
+  isShowNextGamesEnabled(): boolean {
     return this._settings.get_boolean(this._CONSTANTS.PREF_SHOW_NEXT_GAMES);
   }
 
-  async getAvailableTeams() {
+  async getAvailableTeams(): Promise<Array<{ id: number; name: string; league: string }>> {
     const enabledLeagues = this.getEnabledLeagues();
-    const teams = [];
+    const teams: Array<{ id: number; name: string; league: string }> = [];
 
     for (const league of enabledLeagues) {
       const leagueTeams = this._CONSTANTS.SPORTS[league] || [];

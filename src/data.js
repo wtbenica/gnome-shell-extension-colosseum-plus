@@ -5,21 +5,18 @@ import Gio from "gi://Gio";
 import { CacheManager } from "./cache_manager.js";
 import { loadEnv } from "./env_loader.js";
 import { SportradarClient } from "./sportradar_client.js";
-import { logInfo, logErr } from "./logging/error_utils.js";
+import { logErr } from "./logging/error_utils.js";
 
 const env = loadEnv();
 const SPORT_RADAR_KEY = env.SPORT_RADAR_KEY;
 
 class DataLoaderClass {
   constructor() {
-    logInfo('DataLoader: Constructor called');
     this.cacheManager = new CacheManager();
     this.sportradarClient = new SportradarClient(SPORT_RADAR_KEY);
-    logInfo('DataLoader: Constructor complete');
   }
 
   async fetchCompetitions() {
-    logInfo('DataLoader: Fetching competitions');
     
     // Define the target leagues mapping
     const targetLeagues = {
@@ -33,7 +30,6 @@ class DataLoaderClass {
     const cachedCompetitions = this.cacheManager.getRawCompetitions();
     // If cache exists, synthesize a competitions list that guarantees entries for our target leagues.
     if (cachedCompetitions.length > 0) {
-      logInfo('DataLoader: Found cached competitions:', cachedCompetitions.length);
       const cacheById = new Map(cachedCompetitions.map(c => [c.id, c]));
       const result = [];
       for (const [name, details] of Object.entries(targetLeagues)) {
@@ -44,15 +40,12 @@ class DataLoaderClass {
           result.push({ id: details.id, name: name, category: details.category, _placeholder: true });
         }
       }
-      logInfo('DataLoader: Returning synthesized competitions (cache + placeholders):', result.map(c => `${c.name} - ${c.id}${c._placeholder ? ' (placeholder)' : ''}`));
       return result;
     }
 
     // Fetch from API
     const competitions = await this.sportradarClient.getCompetitions();
     if (competitions.length > 0) {
-      // Log all competition names for debugging
-      logInfo('DataLoader: All competitions:', competitions.map(c => `${c.name} (${c.category?.name}) - ID: ${c.id}${c.parent_id ? ` - Parent: ${c.parent_id}` : ''}`));
             // Filter to only the 4 target leagues
       // Filter to only the 4 target leagues (use the same mapping defined above)
       const filteredCompetitions = competitions.filter(comp => {
@@ -63,26 +56,22 @@ class DataLoaderClass {
         }
         return false;
       });
-      logInfo('DataLoader: Filtered competitions:', filteredCompetitions.map(c => `${c.name} (${c.category?.name}) - ID: ${c.id}${c.parent_id ? ` - Parent: ${c.parent_id}` : ''}`));
       // Update cache with competitions. Preserve any existing leagues/teams in cache.
       const currentLeagues = this.cacheManager.getLeagues();
       const currentTeams = this.cacheManager.data.teams || {};
       // save(leagues, teams, rawCompetitions)
       this.cacheManager.save(currentLeagues, currentTeams, filteredCompetitions);
-      logInfo('DataLoader: Fetched and cached competitions:', filteredCompetitions.length);
       return filteredCompetitions;
     }
     return [];
   }
 
   async fetchCompetitionInfo(competitionId) {
-    logInfo('DataLoader: Fetching competition info for', competitionId);
     
     // Check cache first
     const cachedTeams = this.cacheManager.getTeams(competitionId);
     // Prefer cached teams if available to avoid unnecessary API calls.
     if (cachedTeams.length > 0) {
-      logInfo('DataLoader: Returning cached teams for', competitionId, ':', cachedTeams.length);
       return cachedTeams;
     }
 
@@ -96,11 +85,9 @@ class DataLoaderClass {
       const currentTeams = this.cacheManager.data.teams || {};
       currentTeams[competitionId] = teams;
       this.cacheManager.save(currentLeagues, currentTeams, currentCompetitions);
-      logInfo('DataLoader: Fetched and cached teams for', competitionId, ':', teams.length);
       return teams;
     }
     
-    logInfo('DataLoader: Failed to fetch competition info for', competitionId);
     return [];
   }
 
@@ -109,10 +96,8 @@ class DataLoaderClass {
    * Returns an array of event objects similar to client.parseEvent's output.
    */
   async fetchCompetitorSchedules(competitorId, daysAhead = 7) {
-    logInfo('DataLoader: Fetching schedules for competitor', competitorId);
     try {
       const schedules = await this.sportradarClient.getCompetitorSchedules(competitorId);
-      logInfo('DataLoader: Raw schedules count for', competitorId, schedules.length);
 
       const events = [];
       const seen = new Set();
@@ -181,7 +166,6 @@ class DataLoaderClass {
 
       // sort by timestamp
       events.sort((a,b) => a.timestamp - b.timestamp);
-      logInfo('DataLoader: Converted events for', competitorId, events.length);
       return events;
     } catch (e) {
       logErr(e, 'DataLoader: Error fetching schedules for competitor ' + competitorId);
