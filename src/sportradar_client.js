@@ -1,7 +1,7 @@
 import GLib from "gi://GLib";
 import Soup from "gi://Soup";
 
-import { logErr } from "./logging/error_utils.js";
+import { logErr, logInfo } from "./logging/error_utils.js";
 
 /**
  * Sportradar API client for soccer data
@@ -19,8 +19,7 @@ export class SportradarClient {
   async request(endpoint) {
     if (!this.apiKey) {
       try {
-        // Prefer console logging so messages appear in GNOME Shell journal
-        console.warn(`SportradarClient: no API key provided, skipping request to ${endpoint}`);
+        logInfo(`SportradarClient: no API key provided, skipping request to ${endpoint}`, 'SportradarClient');
       } catch (e) {}
       return null;
     }
@@ -47,20 +46,20 @@ export class SportradarClient {
                   } catch (e) {
                     logErr(e, "SportradarClient: Failed to parse response");
                     try {
-                      console.warn(`SportradarClient: response parse failed for ${endpoint}; length=${text.length}`);
+                      logInfo(`SportradarClient: response parse failed for ${endpoint}; length=${text.length}`, 'SportradarClient');
                       // Log a truncated preview of the raw response to help debugging (first 1024 chars)
                       const preview = text.substring(0, 1024).replace(/\s+/g, ' ').trim();
-                      console.warn(`SportradarClient: response preview for ${endpoint}: ${preview}`);
+                      logInfo(`SportradarClient: response preview for ${endpoint}: ${preview}`, 'SportradarClient');
                     } catch (__) {}
                     resolve(null);
                   }
                 } else {
-                  try { console.warn(`SportradarClient: empty response for ${endpoint}`); } catch (__) {}
+                  try { logInfo(`SportradarClient: empty response for ${endpoint}`, 'SportradarClient'); } catch (__) {}
                   resolve(null);
                 }
           } catch (error) {
             logErr(error, "SportradarClient: Error in request for " + endpoint);
-            try { console.warn(`SportradarClient: request error for ${endpoint}: ${error}`); } catch (__) {}
+            try { logInfo(`SportradarClient: request error for ${endpoint}: ${error}`, 'SportradarClient'); } catch (__) {}
             resolve(null);
           }
         }

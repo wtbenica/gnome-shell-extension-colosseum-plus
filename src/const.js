@@ -1,4 +1,5 @@
 import DataLoader from "./data.js";
+import { logErr } from "./logging/error_utils.js";
 
 let constantsPromise = null;
 let loadedConstants = null;
@@ -68,6 +69,6 @@ getConstants().then(constants => {
   DISPLAY_NAME = { ...DISPLAY_NAME, ...(constants.DISPLAY_NAME || {}) };
   SPORTS = { ...SPORTS, ...(constants.SPORTS || {}) };
 }).catch(error => {
-  console.error('Failed to load dynamic constants:', error);
+  logErr(error, 'Failed to load dynamic constants');
   // Keep static fallbacks
 });

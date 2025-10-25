@@ -15,6 +15,7 @@ import * as CONSTANTS from "../const.js";
 import ColosseumClient from "../client.js";
 import { GameLink } from "./game_link.js";
 import { TeamSelectorDialog } from "./team_selector.js";
+import { logInfo, logErr } from "../logging/error_utils.js";
 
 const EXT_PATH = import.meta.url;
 
@@ -167,7 +168,6 @@ export const Colosseum = GObject.registerClass(
         if (homeFollowed) {
           try { homeLabel.add_style_class_name('team--followed'); } catch (e) {}
           try { if (accentColor) homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
-          try { log && log(`Colosseum: styled followed HOME team: ${games[j].home.team} (id=${games[j].home.id})`); } catch (e) { try { console.log(`Colosseum: styled followed HOME team: ${games[j].home.team} (id=${games[j].home.id})`); } catch (__) {} }
         }
 
         let homeScore = new St.Label({
@@ -200,7 +200,6 @@ export const Colosseum = GObject.registerClass(
         if (awayFollowed) {
           try { awayLabel.add_style_class_name('team--followed'); } catch (e) {}
           try { if (accentColor) awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
-          try { log && log(`Colosseum: styled followed AWAY team: ${games[j].away.team} (id=${games[j].away.id})`); } catch (e) { try { console.log(`Colosseum: styled followed AWAY team: ${games[j].away.team} (id=${games[j].away.id})`); } catch (__) {} }
         }
 
         let awayScore = new St.Label({
@@ -249,13 +248,11 @@ export const Colosseum = GObject.registerClass(
     }
 
     _createMenu() {
-      try { if (typeof log === 'function') log('Colosseum: _createMenu() called'); else console.log('Colosseum: _createMenu() called'); } catch (e) {}
       let menus = [];
 
       // Add Configure Teams menu item at the top
       let configureTeamsItem = new PopupMenu.PopupMenuItem("Configure Teams");
       configureTeamsItem.connect('activate', () => {
-        console.log('Colosseum: Opening team selector dialog...');
         this._openTeamSelector();
       });
       menus.push(configureTeamsItem);
@@ -287,20 +284,13 @@ export const Colosseum = GObject.registerClass(
             const globalFollowed = this._settings.get_strv('followed-teams') || [];
             if (globalFollowed && globalFollowed.length > 0) {
               followedIds = globalFollowed;
-              try { if (typeof log === 'function') log(`Colosseum: pushGames fallback to global followed-teams for league="${leagueName}"`); } catch (__) {}
             }
           } catch (e) {
             // ignore
           }
         }
 
-        try {
-          if (typeof log === 'function') {
-            log(`Colosseum: pushGames called for league="${leagueName}" followedIds=[${followedIds}]`);
-          } else {
-            console.log(`Colosseum: pushGames called for league="${leagueName}" followedIds=[${followedIds}]`);
-          }
-        } catch (e) {}
+        // intentionally silent for regular operation (no debug logging)
 
         for (let g of games) {
           // mark whether each team is followed
@@ -351,25 +341,7 @@ export const Colosseum = GObject.registerClass(
         }
       }
 
-      // Debug: dump followed-teams setting and flattened allGames entries so we can trace ID matching
-      try {
-        let followedSetting = [];
-        try { followedSetting = this._settings.get_strv('followed-teams') || []; } catch (e) { followedSetting = []; }
-        if (typeof log === 'function') {
-          log(`Colosseum: followed-teams setting = [${followedSetting}]`);
-          log(`Colosseum: flattened allGames count = ${allGames.length}`);
-        } else {
-          console.log(`Colosseum: followed-teams setting = [${followedSetting}]`);
-          console.log(`Colosseum: flattened allGames count = ${allGames.length}`);
-        }
-        for (let i = 0; i < allGames.length; i++) {
-          const gg = allGames[i];
-          const msg = `Colosseum: allGames[${i}] league=${gg._league} ts=${gg.timestamp} home=${gg.home.team}(id=${gg.home.id}) homeFollowed=${gg._homeFollowed} away=${gg.away.team}(id=${gg.away.id}) awayFollowed=${gg._awayFollowed}`;
-          if (typeof log === 'function') log(msg); else console.log(msg);
-        }
-      } catch (e) {
-        try { console.error('Colosseum: failed to dump debug info', e); } catch (__) {}
-      }
+      // Debugging output removed for production
 
       // If compact content exists, add it first as before
       if (HAS_COMPACT) {
@@ -399,8 +371,18 @@ export const Colosseum = GObject.registerClass(
       // ensure a placeholder "Next Games" submenu exists so the user can always access it.
       if (allGames.length === 0) {
         if (this._client && this._client.isShowNextGamesEnabled && this._client.isShowNextGamesEnabled()) {
-          let submenu = new PopupMenu.PopupSubMenuMenuItem("Next Games");
-          submenu.add_style_class_name("scoreBoardPanel");
+            let submenu = new PopupMenu.PopupSubMenuMenuItem("Next Games");
+            // Prevent submenu header from receiving hover highlight — submenu
+            // headers are menu items by default and can highlight when the
+            // pointer enters the submenu area. Disable actor hover/reactive
+            // so the section appears static.
+            try {
+              if (submenu && submenu.actor) {
+                submenu.actor.reactive = false;
+                submenu.actor.track_hover = false;
+              }
+            } catch (__) {}
+            submenu.add_style_class_name("scoreBoardPanel");
           submenu.connect('activate', (submenu) => {
             submenu.setSubmenuShown(!submenu.submenuShown);
             return true;
@@ -410,6 +392,13 @@ export const Colosseum = GObject.registerClass(
             hover: false,
             activate: false,
           });
+          // Ensure the base menu item actor does not react to pointer hover
+          try {
+            if (baseMenuItem && baseMenuItem.actor) {
+              baseMenuItem.actor.reactive = false;
+              baseMenuItem.actor.track_hover = false;
+            }
+          } catch (__) {}
 
           let placeholderText = "No upcoming games";
           if (this._nextGamesMissingApiKey) {
@@ -547,6 +536,12 @@ export const Colosseum = GObject.registerClass(
       groupBox.set_width(295);
 
       const baseMenuItem = new PopupMenu.PopupBaseMenuItem({ hover: false, activate: false });
+      try {
+        if (baseMenuItem && baseMenuItem.actor) {
+          baseMenuItem.actor.reactive = false;
+          baseMenuItem.actor.track_hover = false;
+        }
+      } catch (__) {}
       baseMenuItem.add_child(groupBox);
       menus.push(baseMenuItem);
 
@@ -555,13 +550,10 @@ export const Colosseum = GObject.registerClass(
 
     _openTeamSelector() {
       try {
-        console.log('Colosseum: Creating team selector dialog...');
         const dialog = new TeamSelectorDialog(this._settings, this._constants);
         dialog.open();
-        console.log('Colosseum: Team selector dialog opened');
       } catch (error) {
-        console.error('Colosseum: Failed to open team selector:', error);
-        console.error('Colosseum: Error stack:', error.stack);
+        try { logErr(error, 'Failed to open team selector'); } catch (e) {}
       }
     }
 
@@ -574,7 +566,6 @@ export const Colosseum = GObject.registerClass(
     }
 
     async _update() {
-      try { if (typeof log === 'function') log('Colosseum: _update() called'); else console.log('Colosseum: _update() called'); } catch (e) {}
       await this._loadData();
       let menus = this._createMenu();
       this.menu.removeAll();
@@ -600,7 +591,7 @@ export const Colosseum = GObject.registerClass(
           try {
             this._nextGamesMissingApiKey = !DataLoader.sportradarClient || !DataLoader.sportradarClient.apiKey;
             if (this._nextGamesMissingApiKey) {
-              try { console.warn('Colosseum: SPORT_RADAR_KEY is missing; Next Games will be disabled until you add it to .env'); } catch (__) {}
+              try { logInfo('SPORT_RADAR_KEY is missing; Next Games will be disabled until you add it to .env', 'Colosseum'); } catch (__) {}
             }
           } catch (e) {
             this._nextGamesMissingApiKey = false;
@@ -611,15 +602,6 @@ export const Colosseum = GObject.registerClass(
 
           for (const teamId of followed) {
             const tTeamStart = Date.now();
-            // Diagnostic: log which teamId we're fetching schedules for
-            try {
-              log(`Colosseum: fetching schedules for team ${teamId}`);
-            } catch (e) {
-              // fallback to console if log isn't available
-              try { console.log(`Colosseum: fetching schedules for team ${teamId}`); } catch (__) {}
-            }
-
-
             // Try to use cached schedules when available to reduce API calls
             const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
             let teamEvents = [];
@@ -627,9 +609,9 @@ export const Colosseum = GObject.registerClass(
               const cached = this._scheduleCache.get(teamId);
               if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
                 teamEvents = cached.events;
-                try { if (typeof log === 'function') log(`Colosseum: schedule cache HIT for ${teamId}`); } catch (__) {}
+                // cache hit (silent)
               } else {
-                try { if (typeof log === 'function') log(`Colosseum: schedule cache MISS for ${teamId}`); } catch (__) {}
+                // cache miss (silent)
                 teamEvents = await DataLoader.fetchCompetitorSchedules(teamId, 7);
                 // store in cache
                 try { this._scheduleCache.set(teamId, { ts: Date.now(), events: teamEvents }); } catch (__) {}
@@ -639,12 +621,7 @@ export const Colosseum = GObject.registerClass(
               try { teamEvents = await DataLoader.fetchCompetitorSchedules(teamId, 7); } catch (__) { teamEvents = []; }
             }
 
-            // Diagnostic: log how many events were returned for this team
-            try {
-              log(`Colosseum: received ${teamEvents.length} events for team ${teamId}`);
-            } catch (e) {
-              try { console.log(`Colosseum: received ${teamEvents.length} events for team ${teamId}`); } catch (__) {}
-            }
+            // received events for this team (silent)
             for (const ev of teamEvents) {
               // use timestamp + team names to dedupe
               const key = `${ev.timestamp}-${ev.home.team}-${ev.away.team}`;
@@ -659,10 +636,10 @@ export const Colosseum = GObject.registerClass(
 
           // convert map to array
           this._nextGames = Array.from(eventsByLeague.values());
-        } catch (e) {
-          console.error('Colosseum: Failed to load next games from DataLoader, falling back to league-based', e);
-          this._nextGames = await this._client.getNextGames();
-        }
+          } catch (e) {
+            try { logErr(e, 'Failed to load next games from DataLoader, falling back to league-based'); } catch (__) {}
+            this._nextGames = await this._client.getNextGames();
+          }
       } else {
         this._nextGames = [];
       }

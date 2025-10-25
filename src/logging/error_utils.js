@@ -128,6 +128,9 @@ export function logErr(error, context) {
   return logMessage(error, context, "error");
 }
 
+// Note: do NOT export a `logError` alias here to avoid colliding with the
+// GNOME/Javascript `logError` global; consumers should call `logErr`.
+
 /**
  * Log a warning message with optional context.
  *
