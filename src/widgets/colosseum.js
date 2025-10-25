@@ -82,10 +82,10 @@ export const Colosseum = GObject.registerClass(
   () => { this._update(); }
       );
 
-      // Listen for changes to followed teams and update upcoming games immediately
+      // Listen for changes to followed teams and reload data
       this._settings.connect(
         "changed::followed-teams",
-  () => { this._update(); }
+        () => { this._update(); }
       );
 
       this._client = new ColosseumClient(this._constants, this._settings);

@@ -112,19 +112,10 @@ if [[ -d "schemas" ]]; then
   find schemas -name 'gschemas.compiled' -delete || true
 fi
 
-ZIP_NAME="${DIR}/colosseum_45.zip"
+# Create a single GNOME-friendly shell-extension zip
+ZIP_NAME="${DIR}/colosseum@sereneblue.shell-extension.zip"
 echo "Creating zip: $ZIP_NAME"
 zip -r -q "$ZIP_NAME" .
 popd >/dev/null
 
 echo "Build complete. Zip created at: $ZIP_NAME"
-
-# Also create a GNOME-friendly shell-extension zip directly from dist/
-SHELL_EXT_ZIP="${DIR}/colosseum@sereneblue.shell-extension.zip"
-if [[ -d "dist" ]]; then
-  echo "Creating GNOME shell-extension zip: $SHELL_EXT_ZIP"
-  (cd dist && zip -r -q "$SHELL_EXT_ZIP" .)
-  echo "Shell extension zip created at: $SHELL_EXT_ZIP"
-else
-  echo "Warning: dist/ not found; cannot create shell-extension zip" >&2
-fi

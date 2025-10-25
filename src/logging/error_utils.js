@@ -33,10 +33,15 @@
  * ```
  */
 
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import { gjsLogger } from "./logger_gjs.js";
 
 // Current logger instance (can be overridden for tests)
 let currentLogger = gjsLogger;
+
+// Log file directory
+const LOG_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension', 'logs']);
 
 /**
  * Set the logger instance for testing or alternative environments.
@@ -194,6 +199,66 @@ export function logInfo(message, context) {
  */
 export function logDebug(message, context) {
   return logMessage(message, context, "debug");
+}
+
+/**
+ * Log a message to a file with timestamp.
+ *
+ * Appends the message to the specified log file in ~/.cache/colosseum-extension/logs/.
+ * Each message is prefixed with a timestamp. Creates the directory and file if they
+ * don't exist.
+ *
+ * @param message - Message to write to the log file
+ * @param filename - Name of the log file (e.g., 'api-calls.log')
+ *
+ * @example
+ * ```typescript
+ * logFile('GET /competitions - 200 OK', 'api-calls.log');
+ * logFile('Cache miss for team 12345', 'cache-stats.log');
+ * ```
+ */
+export function logFile(message, filename) {
+  try {
+    // Ensure log directory exists
+    const logDir = Gio.File.new_for_path(LOG_DIR);
+    if (!logDir.query_exists(null)) {
+      logDir.make_directory_with_parents(null);
+    }
+
+    // Build log file path
+    const logPath = GLib.build_filenamev([LOG_DIR, filename]);
+    const logFile = Gio.File.new_for_path(logPath);
+
+    // Format message with timestamp
+    const now = new Date();
+    const timestamp = now.toISOString();
+    const logLine = `[${timestamp}] ${message}\n`;
+
+    // Append to file (create if doesn't exist)
+    if (logFile.query_exists(null)) {
+      // File exists, append
+      const stream = logFile.append_to(Gio.FileCreateFlags.NONE, null);
+      stream.write(logLine, null);
+      stream.close(null);
+    } else {
+      // File doesn't exist, create and write
+      logFile.replace_contents(
+        logLine,
+        null,
+        false,
+        Gio.FileCreateFlags.REPLACE_DESTINATION,
+        null
+      );
+    }
+  } catch (e) {
+    // Fallback to console logging if file writing fails
+    try {
+      currentLogger.log(`[FILE-LOG-ERROR] Failed to write to ${filename}: ${e.message}`);
+      currentLogger.log(`[FILE-LOG] ${message}`);
+    } catch (__) {
+      // Silent failure if both file and console logging fail
+    }
+  }
 }
 
 /**
