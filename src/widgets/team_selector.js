@@ -2,6 +2,7 @@ import Clutter from "gi://Clutter";
 import GLib from "gi://GLib";
 import GObject from "gi://GObject";
 import St from "gi://St";
+import Gio from "gi://Gio";
 import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
 
 import { logInfo, logErr } from "../logging/error_utils.js";
@@ -77,6 +78,16 @@ export const TeamSelectorDialog = GObject.registerClass(
 
         // For each competition, create a league container and show a placeholder header immediately.
         const followed = this._settings.get_strv('followed-teams');
+        // determine accent color from system settings (fallback to stylesheet color)
+        let accentColor = '#ffd966';
+        try {
+          const ifaceSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
+          const ac = ifaceSettings.get_string('accent-color');
+          if (ac) accentColor = ac;
+        } catch (e) {
+          // ignore and use fallback
+        }
+        logInfo('TeamSelector: resolved accentColor =', accentColor);
         let totalCollected = 0;
 
         for (const comp of competitions) {
@@ -107,7 +118,7 @@ export const TeamSelectorDialog = GObject.registerClass(
 
             // Remove the status label and render this competition's teams into the league container
             leagueContainer.remove_child(statusLabel);
-            this._renderTeamsBatchedForLeague(teams, comp.name, followed, leagueContainer);
+            this._renderTeamsBatchedForLeague(teams, comp.name, followed, leagueContainer, accentColor);
           } else {
             // Update the status label to indicate no teams are available
             statusLabel.set_text(comp._placeholder ? 'Not cached' : 'No teams available');
@@ -127,7 +138,7 @@ export const TeamSelectorDialog = GObject.registerClass(
       }
     }
 
-    _renderTeamsBatched(allTeams, followedTeams) {
+  _renderTeamsBatched(allTeams, followedTeams, accentColor) {
       logInfo('TeamSelector: Starting batched render of', allTeams.length, 'teams');
       this._batchIndex = 0;
       this._allTeams = allTeams;
@@ -155,9 +166,18 @@ export const TeamSelectorDialog = GObject.registerClass(
 
           let teamBox = new St.BoxLayout({ style_class: 'team-selector-team-row', vertical: false });
           let teamLabel = new St.Label({ text: team.name, style_class: 'team-selector-team-label', x_expand: true });
-
           const teamId = String(team.id);
-          const isFollowed = this._followedCache.has(teamId);
+          const isFollowed = this._followedCache ? this._followedCache.has(teamId) : false;
+          // apply followed styling if currently followed
+          if (isFollowed) {
+            teamLabel.add_style_class_name('team--followed');
+            try {
+              if (accentColor) teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
+            } catch (e) {
+              /* ignore */
+            }
+            try { teamBox.add_style_class_name('team--followed'); } catch (e) { }
+          }
 
           let teamSwitch = new St.Button({
             style_class: isFollowed ? 'team-selector-switch team-selector-switch-active' : 'team-selector-switch',
@@ -172,11 +192,19 @@ export const TeamSelectorDialog = GObject.registerClass(
               currentFollowed.splice(index, 1);
               teamSwitch.remove_style_class_name('team-selector-switch-active');
               teamSwitch.set_label('');
+              teamLabel.remove_style_class_name('team--followed');
+              try { teamLabel.set_style(''); } catch (e) { }
+              try { teamBox.remove_style_class_name('team--followed'); } catch (e) { }
               logInfo('TeamSelector: Unfollowed team:', team.name);
             } else {
               currentFollowed.push(teamId);
               teamSwitch.add_style_class_name('team-selector-switch-active');
               teamSwitch.set_label('✓');
+              teamLabel.add_style_class_name('team--followed');
+              try {
+                if (accentColor) teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
+              } catch (e) { }
+              try { teamBox.add_style_class_name('team--followed'); } catch (e) { }
               logInfo('TeamSelector: Followed team:', team.name);
             }
             this._settings.set_strv('followed-teams', currentFollowed);
@@ -210,7 +238,7 @@ export const TeamSelectorDialog = GObject.registerClass(
       });
     }
 
-    _renderTeamsBatchedForLeague(teams, leagueName, followedTeams, container) {
+    _renderTeamsBatchedForLeague(teams, leagueName, followedTeams, container, accentColor) {
       logInfo('TeamSelector: Starting batched render for league', leagueName, teams.length, 'teams');
       let batchIndex = 0;
       const batchSize = 12; // per-league batch size
@@ -236,6 +264,21 @@ export const TeamSelectorDialog = GObject.registerClass(
 
           const teamId = String(team.id);
           const isFollowed = followedCache.has(teamId);
+          // apply followed styling if currently followed
+          if (isFollowed) {
+            teamLabel.add_style_class_name('team--followed');
+            // If an accent color was provided, apply it inline for immediate visual feedback
+            try {
+              if (accentColor) {
+                logInfo('TeamSelector: applying inline accent color', accentColor, 'to', team.name);
+                teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
+              }
+            } catch (e) {
+              // If set_style isn't available or fails, fall back to the CSS class only
+              logInfo('TeamSelector: set_style failed for', team.name, e && e.message);
+            }
+            try { teamBox.add_style_class_name('team--followed'); } catch (e) { }
+          }
 
           let teamSwitch = new St.Button({
             style_class: isFollowed ? 'team-selector-switch team-selector-switch-active' : 'team-selector-switch',
@@ -251,12 +294,20 @@ export const TeamSelectorDialog = GObject.registerClass(
               teamSwitch.remove_style_class_name('team-selector-switch-active');
               teamSwitch.set_label('');
               followedCache.delete(teamId);
+              teamLabel.remove_style_class_name('team--followed');
+              try { teamLabel.set_style(''); } catch (e) { }
+              try { teamBox.remove_style_class_name('team--followed'); } catch (e) { }
               logInfo('TeamSelector: Unfollowed team:', team.name);
             } else {
               currentFollowed.push(teamId);
               teamSwitch.add_style_class_name('team-selector-switch-active');
               teamSwitch.set_label('✓');
               followedCache.add(teamId);
+              teamLabel.add_style_class_name('team--followed');
+              try {
+                if (accentColor) teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
+              } catch (e) {}
+              try { teamBox.add_style_class_name('team--followed'); } catch (e) {}
               logInfo('TeamSelector: Followed team:', team.name);
             }
             this._settings.set_strv('followed-teams', currentFollowed);

@@ -8,12 +8,15 @@ import { logInfo, logErr } from "./logging/error_utils.js";
 
 export default class ColosseumExtension extends Extension {
   async enable() {
-    logInfo('Colosseum extension: Starting enable...');
-    
+    const tEnableStart = Date.now();
+    logInfo('Colosseum extension: Starting enable at ' + tEnableStart);
+
     // Check if we should update data (only on Mondays if cache is stale)
     try {
+      const tDataUpdateStart = Date.now();
+      logInfo('Colosseum extension: checkForDataUpdates start at ' + tDataUpdateStart);
       await this.checkForDataUpdates();
-      logInfo('Colosseum extension: Data updates checked');
+      logInfo('Colosseum extension: Data updates checked in ' + (Date.now() - tDataUpdateStart) + ' ms');
     } catch (error) {
       logErr(error, 'Colosseum extension: Failed to check data updates');
     }
@@ -21,8 +24,10 @@ export default class ColosseumExtension extends Extension {
     // Load dynamic constants first
     let constants;
     try {
+      const tConstantsStart = Date.now();
+      logInfo('Colosseum extension: getConstants start at ' + tConstantsStart);
       constants = await getConstants();
-      logInfo('Colosseum extension: Constants loaded');
+      logInfo('Colosseum extension: Constants loaded in ' + (Date.now() - tConstantsStart) + ' ms');
     } catch (error) {
       logErr(error, 'Colosseum extension: Failed to load dynamic constants');
       constants = {}; // fallback
@@ -36,7 +41,10 @@ export default class ColosseumExtension extends Extension {
       constants,
     );
     logInfo('Colosseum extension: Calling initial update...');
-    this.scores._update().catch(error => {
+    const tUpdateStart = Date.now();
+    this.scores._update().then(() => {
+      logInfo('Colosseum extension: Initial update completed in ' + (Date.now() - tUpdateStart) + ' ms');
+    }).catch(error => {
       logErr(error, 'Colosseum extension: Failed to update scores');
     });
 
@@ -49,7 +57,7 @@ export default class ColosseumExtension extends Extension {
         ? "left"
         : "right",
     );
-    logInfo('Colosseum extension: Enable complete!');
+    logInfo('Colosseum extension: Enable complete in ' + (Date.now() - tEnableStart) + ' ms');
   }
 
   async checkForDataUpdates() {

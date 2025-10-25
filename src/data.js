@@ -104,6 +104,91 @@ class DataLoaderClass {
     return [];
   }
 
+  /**
+   * Fetch schedules for a competitor (team) and convert to internal event shape.
+   * Returns an array of event objects similar to client.parseEvent's output.
+   */
+  async fetchCompetitorSchedules(competitorId, daysAhead = 7) {
+    logInfo('DataLoader: Fetching schedules for competitor', competitorId);
+    try {
+      const schedules = await this.sportradarClient.getCompetitorSchedules(competitorId);
+      logInfo('DataLoader: Raw schedules count for', competitorId, schedules.length);
+
+      const events = [];
+      const seen = new Set();
+
+  const now = Date.now();
+  const limitTs = now + daysAhead * 24 * 60 * 60 * 1000;
+
+      for (const item of schedules) {
+        // normalize to sport_event object if wrapped
+        const se = item.sport_event || item.sport_event || item;
+
+        // try to get an id
+        const evId = se.id || se.sport_event_id || se.sport_event?.id || JSON.stringify(se);
+        if (seen.has(evId)) continue;
+        seen.add(evId);
+
+        // extract timestamp
+        const dateStr = se.scheduled || se.start_time || se.start || se.sport_event?.scheduled || se.sport_event?.start;
+        if (!dateStr) continue;
+        const ts = Date.parse(dateStr);
+  if (isNaN(ts)) continue;
+  // Only include schedules between now (inclusive) and the limit timestamp
+  if (ts < now) continue; // skip past events
+  if (ts > limitTs) continue; // skip too-far in future
+
+        // extract competitors
+        const comps = se.competitors || se.sport_event?.competitors || se.competitors || [];
+        if (!Array.isArray(comps) || comps.length < 2) continue;
+
+        // heuristics: find home/away by qualifier or by order
+        let home = comps.find(c => c.qualifier === 'home') || comps[0];
+        let away = comps.find(c => c.qualifier === 'away') || comps[1];
+
+        const homeObj = {
+          id: String(home.id || home.urn || home._id || home.uid),
+          team: home.name || home.common_name || home.original_name || '',
+          teamAbbr: (home.name || '').substring(0,3).toUpperCase(),
+          score: '',
+          isWinner: false,
+          isLoser: false,
+        };
+
+        const awayObj = {
+          id: String(away.id || away.urn || away._id || away.uid),
+          team: away.name || away.common_name || away.original_name || '',
+          teamAbbr: (away.name || '').substring(0,3).toUpperCase(),
+          score: '',
+          isWinner: false,
+          isLoser: false,
+        };
+
+        const meta = new Date(ts).toLocaleString(undefined, { hour: 'numeric', minute: 'numeric' });
+
+        const event = {
+          home: homeObj,
+          away: awayObj,
+          meta: meta,
+          timestamp: ts,
+          link: null,
+          live: false,
+          isComplete: false,
+        };
+
+        events.push(event);
+      }
+
+      // sort by timestamp
+      events.sort((a,b) => a.timestamp - b.timestamp);
+      logInfo('DataLoader: Converted events for', competitorId, events.length);
+      return events;
+    } catch (e) {
+      logErr(e, 'DataLoader: Error fetching schedules for competitor ' + competitorId);
+      return [];
+    }
+  }
+
   async getDynamicConstants() {
     const competitions = await this.fetchCompetitions();
     

@@ -8,7 +8,9 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
+
 import * as CONSTANTS from "../const.js";
+import { logInfo } from "../logging/error_utils.js";
 
 import ColosseumClient from "../client.js";
 import { GameLink } from "./game_link.js";
@@ -27,8 +29,9 @@ export const Colosseum = GObject.registerClass(
       this._timeout = null;
       this._settings = null;
 
-      // Make the panel box non-reactive so the top-bar doesn't light up on hover
-      this._panelBoxLayout = new St.BoxLayout({ reactive: false, track_hover: false });
+  // Make the panel box reactive so clicks are handled correctly by the parent PanelMenu.Button
+  // Keep track_hover false to avoid hover highlighting; visual hover is suppressed in stylesheet.
+  this._panelBoxLayout = new St.BoxLayout({ reactive: true, track_hover: false });
 
       this._icon = new St.Icon({
         gicon: Gio.icon_new_for_string(
@@ -57,21 +60,28 @@ export const Colosseum = GObject.registerClass(
     setSettings(settings, constants) {
       this._settings = settings;
       this._constants = constants;
+      logInfo('Colosseum: Connecting settings signals...');
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_POSITION_TOPBAR,
-        this._updatePositionInPanel.bind(this),
+        () => { logInfo('Colosseum: PREF_POSITION_TOPBAR changed'); this._updatePositionInPanel(); }
       );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_FOLLOWED_ONLY,
-        this._update.bind(this),
+        () => { logInfo('Colosseum: PREF_FOLLOWED_ONLY changed'); this._update(); }
       );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_COMPACT_MODE,
-        this._update.bind(this),
+        () => { logInfo('Colosseum: PREF_COMPACT_MODE changed'); this._update(); }
       );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_SHOW_NEXT_GAMES,
-        this._update.bind(this),
+        () => { logInfo('Colosseum: PREF_SHOW_NEXT_GAMES changed'); this._update(); }
+      );
+
+      // Listen for changes to followed teams and update upcoming games immediately
+      this._settings.connect(
+        "changed::followed-teams",
+        () => { logInfo('Colosseum: followed-teams changed'); this._update(); }
       );
 
       this._client = new ColosseumClient(this._constants, this._settings);
@@ -451,33 +461,64 @@ export const Colosseum = GObject.registerClass(
     }
 
     async _update() {
-      console.log('Colosseum: Starting _update...');
+      logInfo('Colosseum: Starting _update...');
       await this._loadData();
-      console.log('Colosseum: Data loaded, creating menu...');
+      logInfo('Colosseum: Data loaded, creating menu...');
       let menus = this._createMenu();
-      console.log('Colosseum: Menu created with', menus.length, 'items');
+      logInfo('Colosseum: Menu created with ' + menus.length + ' items');
       this.menu.removeAll();
 
       for (let i = 0; i < menus.length; i++) {
         this.menu.addMenuItem(menus[i]);
       }
 
-      console.log('Colosseum: Setting top bar text...');
+      logInfo('Colosseum: Setting top bar text...');
       this._setTopBarText();
-      console.log('Colosseum: Top bar text set');
+      logInfo('Colosseum: Top bar text set');
 
       // Removed periodic updates to disable live monitoring
-      console.log('Colosseum: Update complete, no periodic updates');
+      logInfo('Colosseum: Update complete, no periodic updates');
     }
 
     async _loadData() {
-      console.log('Colosseum: Loading scores...');
+      const tLoadStart = Date.now();
+      logInfo('Colosseum: Loading scores at ' + tLoadStart);
       this._scores = await this._client.getScores();
-      console.log('Colosseum: Scores loaded:', this._scores.length, 'leagues');
+      logInfo('Colosseum: Scores loaded: ' + this._scores.length + ' leagues in ' + (Date.now() - tLoadStart) + ' ms');
       if (this._client.isShowNextGamesEnabled()) {
-        console.log('Colosseum: Loading next games...');
-        this._nextGames = await this._client.getNextGames();
-        console.log('Colosseum: Next games loaded:', this._nextGames.length, 'leagues');
+        const tNextGamesStart = Date.now();
+        logInfo('Colosseum: Loading next games (Sportradar competitor schedules) at ' + tNextGamesStart);
+        // Build next games from followed teams using DataLoader + Sportradar competitor schedules
+        try {
+          const DataLoader = (await import('../data.js')).default;
+          const followed = this._settings.get_strv('followed-teams') || [];
+          const eventsByLeague = new Map();
+          const seenEvents = new Set();
+
+          for (const teamId of followed) {
+            const tTeamStart = Date.now();
+            logInfo('Colosseum: Fetching competitor schedules for team ' + teamId + ' at ' + tTeamStart);
+            const teamEvents = await DataLoader.fetchCompetitorSchedules(teamId, 7);
+            logInfo('Colosseum: Team ' + teamId + ' schedules loaded in ' + (Date.now() - tTeamStart) + ' ms');
+            for (const ev of teamEvents) {
+              // use timestamp + team names to dedupe
+              const key = `${ev.timestamp}-${ev.home.team}-${ev.away.team}`;
+              if (seenEvents.has(key)) continue;
+              seenEvents.add(key);
+
+              const leagueName = ev.league || ev.competition || ev.home.league || 'Next Games';
+              if (!eventsByLeague.has(leagueName)) eventsByLeague.set(leagueName, { league: leagueName, games: [], following: [] });
+              eventsByLeague.get(leagueName).games.push(ev);
+            }
+          }
+
+          // convert map to array
+          this._nextGames = Array.from(eventsByLeague.values());
+          logInfo('Colosseum: Next games loaded (from followed teams): ' + this._nextGames.length + ' leagues in ' + (Date.now() - tNextGamesStart) + ' ms');
+        } catch (e) {
+          console.error('Colosseum: Failed to load next games from DataLoader, falling back to league-based', e);
+          this._nextGames = await this._client.getNextGames();
+        }
       } else {
         this._nextGames = [];
       }
@@ -562,7 +603,14 @@ export const Colosseum = GObject.registerClass(
     }
 
     destroy() {
-      this._client.session.abort();
+  // Guard the abort call so destroy is safe for any client implementation.
+      try {
+        if (this._client && this._client.session && typeof this._client.session.abort === 'function') {
+          this._client.session.abort();
+        }
+      } catch (e) {
+        // ignore
+      }
 
       if (this._timeout) {
         GLib.source_remove(this._timeout);

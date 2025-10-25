@@ -136,6 +136,34 @@ export class SportradarClient {
   }
 
   /**
+   * Fetch schedules (previous and upcoming) for a competitor
+   */
+  async getCompetitorSchedules(competitorId, locale = "en") {
+    logInfo("SportradarClient: Fetching schedules for competitor", competitorId);
+    const response = await this.request(`${locale}/competitors/${competitorId}/schedules.json`);
+
+    if (!response) {
+      logInfo("SportradarClient: No schedule response for", competitorId);
+      return [];
+    }
+
+    // The response shape may contain 'schedules' or 'sport_events' or other top-level arrays
+    if (Array.isArray(response.schedules)) {
+      return response.schedules;
+    }
+    if (Array.isArray(response.sport_events)) {
+      return response.sport_events;
+    }
+
+    // sometimes the API returns an object with 'data' or directly an array
+    for (const key of Object.keys(response)) {
+      if (Array.isArray(response[key])) return response[key];
+    }
+
+    return [];
+  }
+
+  /**
    * Close the session
    */
   destroy() {

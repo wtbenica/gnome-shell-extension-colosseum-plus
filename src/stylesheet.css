@@ -235,6 +235,24 @@
 	padding: 4px 0px;
 }
 
+/* Ensure followed teams in the team selector get the same highlight as the scoreboard */
+.team-selector-team-label.team--followed {
+    font-weight: 800;
+    color: #ffd966; /* fallback accent color; will be overridden by inline style if available */
+}
+
+/* Stronger selector: highlight the label when the row is marked followed */
+.team-selector-team-row.team--followed .team-selector-team-label {
+	font-weight: 800;
+	color: #ffd966;
+}
+
+/* Expand scope: if the league container marks children, ensure label receives highlight */
+.team-selector-league-container .team-selector-team-label.team--followed {
+	font-weight: 800;
+	color: #ffd966;
+}
+
 .team-selector-switch {
 	min-width: 30px;
 	min-height: 20px;
