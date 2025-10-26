@@ -19,6 +19,61 @@ import { logInfo, logErr } from "../logging/error_utils.js";
 
 const EXT_PATH = import.meta.url;
 
+// GNOME accent color names mapped to hex values
+const ACCENT_MAP_LIGHT = {
+  blue: "#81D0FF",
+  teal: "#7bdff4",
+  green: "#8de698",
+  yellow: "#ffc057",
+  orange: "#ff9c5b",
+  red: "#ff888c",
+  pink: "#ffa0d8",
+  purple: "#fba7ff",
+  slate: "#bbd1e5",
+};
+
+const ACCENT_MAP = {
+  blue: "#3584E4",
+  teal: "#2190A4",
+  green: "#3A944A",
+  yellow: "#C88800",
+  orange: "#ED5B00",
+  red: "#E62D42",
+  pink: "#D56199",
+  purple: "#9141AC",
+  slate: "#6F8396",
+};
+
+const ACCENT_MAP_DARK = {
+  blue: "#0461be",
+  teal: "#007184",
+  green: "#15772e",
+  yellow: "#905300",
+  orange: "#b62200",
+  red: "#c0023",
+  pink: "#a2326c",
+  purple: "#8939a4",
+  slate: "#526678",
+};
+
+/**
+ * Get the current GNOME accent color as a hex string.
+ * Returns the accent color if set, otherwise falls back to blue.
+ */
+function getAccentColor() {
+  try {
+    const ifaceSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
+    const accentName = ifaceSettings.get_string('accent-color');
+    if (accentName) {
+      const normalized = accentName.trim().toLowerCase();
+      return ACCENT_MAP_LIGHT[normalized] || '#3584E4'; // fallback to blue
+    }
+  } catch (e) {
+    // ignore and fall back
+  }
+  return '#3584E4'; // default blue
+}
+
 export const Colosseum = GObject.registerClass(
   { GTypeName: "Colosseum" },
   class Colosseum extends PanelMenu.Button {
@@ -27,16 +82,16 @@ export const Colosseum = GObject.registerClass(
 
       this._scores = [];
       this._nextGames = [];
-  this._nextGamesMissingApiKey = false;
+      this._nextGamesMissingApiKey = false;
       this._timeout = null;
       this._settings = null;
-    // In-memory cache for competitor schedules to avoid repeated API calls during a session
-    // Map: teamId -> { ts: <Date.now()>, events: [...] }
-    this._scheduleCache = new Map();
+      // In-memory cache for competitor schedules to avoid repeated API calls during a session
+      // Map: teamId -> { ts: <Date.now()>, events: [...] }
+      this._scheduleCache = new Map();
 
-  // Make the panel box reactive so clicks are handled correctly by the parent PanelMenu.Button
-  // Keep track_hover false to avoid hover highlighting; visual hover is suppressed in stylesheet.
-  this._panelBoxLayout = new St.BoxLayout({ reactive: true, track_hover: false });
+      // Make the panel box reactive so clicks are handled correctly by the parent PanelMenu.Button
+      // Keep track_hover false to avoid hover highlighting; visual hover is suppressed in stylesheet.
+      this._panelBoxLayout = new St.BoxLayout({ reactive: true, track_hover: false });
 
       this._icon = new St.Icon({
         gicon: Gio.icon_new_for_string(
@@ -67,19 +122,19 @@ export const Colosseum = GObject.registerClass(
       this._constants = constants;
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_POSITION_TOPBAR,
-  () => { this._updatePositionInPanel(); }
+        () => { this._updatePositionInPanel(); }
       );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_FOLLOWED_ONLY,
-  () => { this._update(); }
+        () => { this._update(); }
       );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_COMPACT_MODE,
-  () => { this._update(); }
+        () => { this._update(); }
       );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_SHOW_NEXT_GAMES,
-  () => { this._update(); }
+        () => { this._update(); }
       );
 
       // Listen for changes to followed teams and reload data
@@ -109,15 +164,8 @@ export const Colosseum = GObject.registerClass(
         offset = offset + 1;
       }
 
-      // determine accent color for followed teams (match team selector)
-      let accentColor = '#ffd966';
-      try {
-        const ifaceSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
-        const ac = ifaceSettings.get_string('accent-color');
-        if (ac) accentColor = ac;
-      } catch (e) {
-        // ignore and fall back to stylesheet color
-      }
+      // Get accent color for followed teams
+      const accentColor = getAccentColor();
 
       // get followed teams for this league (if provided) so we can style them
       let followedIds = [];
@@ -166,8 +214,8 @@ export const Colosseum = GObject.registerClass(
         });
 
         if (homeFollowed) {
-          try { homeLabel.add_style_class_name('team--followed'); } catch (e) {}
-          try { if (accentColor) homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
+          try { homeLabel.add_style_class_name('team--followed'); } catch (e) { }
+          try { if (accentColor) homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) { }
         }
 
         let homeScore = new St.Label({
@@ -198,8 +246,8 @@ export const Colosseum = GObject.registerClass(
         });
 
         if (awayFollowed) {
-          try { awayLabel.add_style_class_name('team--followed'); } catch (e) {}
-          try { if (accentColor) awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
+          try { awayLabel.add_style_class_name('team--followed'); } catch (e) { }
+          try { if (accentColor) awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) { }
         }
 
         let awayScore = new St.Label({
@@ -371,18 +419,14 @@ export const Colosseum = GObject.registerClass(
       // ensure a placeholder "Next Games" submenu exists so the user can always access it.
       if (allGames.length === 0) {
         if (this._client && this._client.isShowNextGamesEnabled && this._client.isShowNextGamesEnabled()) {
-            let submenu = new PopupMenu.PopupSubMenuMenuItem("Next Games");
-            // Prevent submenu header from receiving hover highlight — submenu
-            // headers are menu items by default and can highlight when the
-            // pointer enters the submenu area. Disable actor hover/reactive
-            // so the section appears static.
-            try {
-              if (submenu && submenu.actor) {
-                submenu.actor.reactive = false;
-                submenu.actor.track_hover = false;
-              }
-            } catch (__) {}
-            submenu.add_style_class_name("scoreBoardPanel");
+          let submenu = new PopupMenu.PopupSubMenuMenuItem("Next Games");
+          // Disable hover highlighting on the submenu header without graying out text
+          try {
+            if (submenu && submenu.actor) {
+              submenu.actor.track_hover = false;
+            }
+          } catch (__) { }
+          submenu.add_style_class_name("scoreBoardPanel");
           submenu.connect('activate', (submenu) => {
             submenu.setSubmenuShown(!submenu.submenuShown);
             return true;
@@ -392,13 +436,12 @@ export const Colosseum = GObject.registerClass(
             hover: false,
             activate: false,
           });
-          // Ensure the base menu item actor does not react to pointer hover
+          // Disable hover without graying out text
           try {
             if (baseMenuItem && baseMenuItem.actor) {
-              baseMenuItem.actor.reactive = false;
               baseMenuItem.actor.track_hover = false;
             }
-          } catch (__) {}
+          } catch (__) { }
 
           let placeholderText = "No upcoming games";
           if (this._nextGamesMissingApiKey) {
@@ -423,15 +466,8 @@ export const Colosseum = GObject.registerClass(
 
       // Render games grouped by date using vertical BoxLayout of horizontal rows
       let currentDay = null;
-      // determine accent color like the team selector so followed teams have the same inline color
-      let accentColor = '#ffd966';
-      try {
-        const ifaceSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
-        const ac = ifaceSettings.get_string('accent-color');
-        if (ac) accentColor = ac;
-      } catch (e) {
-        // ignore and fall back to stylesheet color
-      }
+      // Get accent color for followed teams
+      const accentColor = getAccentColor();
 
       let groupBox = new St.BoxLayout({
         style_class: "scoreboard",
@@ -478,8 +514,8 @@ export const Colosseum = GObject.registerClass(
         });
 
         if (g._homeFollowed) {
-          try { homeLabel.add_style_class_name('team--followed'); } catch (e) {}
-          try { if (accentColor) homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
+          try { homeLabel.add_style_class_name('team--followed'); } catch (e) { }
+          try { if (accentColor) homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) { }
         }
 
         let homeScore = new St.Label({
@@ -509,8 +545,8 @@ export const Colosseum = GObject.registerClass(
         });
 
         if (g._awayFollowed) {
-          try { awayLabel.add_style_class_name('team--followed'); } catch (e) {}
-          try { if (accentColor) awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) {}
+          try { awayLabel.add_style_class_name('team--followed'); } catch (e) { }
+          try { if (accentColor) awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) { }
         }
 
         let awayScore = new St.Label({
@@ -536,12 +572,12 @@ export const Colosseum = GObject.registerClass(
       groupBox.set_width(295);
 
       const baseMenuItem = new PopupMenu.PopupBaseMenuItem({ hover: false, activate: false });
+      // Don't set reactive:false as it causes gray text. Instead just disable hover.
       try {
         if (baseMenuItem && baseMenuItem.actor) {
-          baseMenuItem.actor.reactive = false;
           baseMenuItem.actor.track_hover = false;
         }
-      } catch (__) {}
+      } catch (__) { }
       baseMenuItem.add_child(groupBox);
       menus.push(baseMenuItem);
 
@@ -553,7 +589,7 @@ export const Colosseum = GObject.registerClass(
         const dialog = new TeamSelectorDialog(this._settings, this._constants);
         dialog.open();
       } catch (error) {
-        try { logErr(error, 'Failed to open team selector'); } catch (e) {}
+        try { logErr(error, 'Failed to open team selector'); } catch (e) { }
       }
     }
 
@@ -591,7 +627,7 @@ export const Colosseum = GObject.registerClass(
           try {
             this._nextGamesMissingApiKey = !DataLoader.sportradarClient || !DataLoader.sportradarClient.apiKey;
             if (this._nextGamesMissingApiKey) {
-              try { logInfo('SPORT_RADAR_KEY is missing; Next Games will be disabled until you add it to .env', 'Colosseum'); } catch (__) {}
+              try { logInfo('SPORT_RADAR_KEY is missing; Next Games will be disabled until you add it to .env', 'Colosseum'); } catch (__) { }
             }
           } catch (e) {
             this._nextGamesMissingApiKey = false;
@@ -614,7 +650,7 @@ export const Colosseum = GObject.registerClass(
                 // cache miss (silent)
                 teamEvents = await DataLoader.fetchCompetitorSchedules(teamId, 7);
                 // store in cache
-                try { this._scheduleCache.set(teamId, { ts: Date.now(), events: teamEvents }); } catch (__) {}
+                try { this._scheduleCache.set(teamId, { ts: Date.now(), events: teamEvents }); } catch (__) { }
               }
             } catch (e) {
               // On any cache or fetch error, fall back to direct fetch
@@ -636,10 +672,10 @@ export const Colosseum = GObject.registerClass(
 
           // convert map to array
           this._nextGames = Array.from(eventsByLeague.values());
-          } catch (e) {
-            try { logErr(e, 'Failed to load next games from DataLoader, falling back to league-based'); } catch (__) {}
-            this._nextGames = await this._client.getNextGames();
-          }
+        } catch (e) {
+          try { logErr(e, 'Failed to load next games from DataLoader, falling back to league-based'); } catch (__) { }
+          this._nextGames = await this._client.getNextGames();
+        }
       } else {
         this._nextGames = [];
       }
@@ -724,7 +760,7 @@ export const Colosseum = GObject.registerClass(
     }
 
     destroy() {
-  // Guard the abort call so destroy is safe for any client implementation.
+      // Guard the abort call so destroy is safe for any client implementation.
       try {
         if (this._client && this._client.session && typeof this._client.session.abort === 'function') {
           this._client.session.abort();
