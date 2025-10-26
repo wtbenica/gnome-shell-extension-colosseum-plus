@@ -1,4 +1,3 @@
-
 import Clutter from "gi://Clutter";
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
@@ -9,33 +8,32 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
-import * as CONSTANTS from "../const.js";
+import * as CONSTANTS from '../config/const.js';
 
-import ColosseumClient from "../client.js";
+import ColosseumClient from '../api/colosseum_client.js';
 import { GameLink } from "./game_link.js";
 import { TeamSelectorDialog } from "./team_selector.js";
-import { logInfo, logErr } from "../logging/error_utils.js";
+import { logInfo, logErr } from "../utils/logging.js";
 
 const EXT_PATH = import.meta.url;
 
-import { getAccentColor } from './accent_utils.js';
+import { getAccentColor } from '../utils/accent_color.js';
 import { addGamesToGrid } from './scoreboard_view.js';
-import { Repository } from './repository.js';
+import { Repository } from '../data/repository.js';
 
 
 export const Colosseum = GObject.registerClass(
   { GTypeName: "Colosseum" },
   class Colosseum extends PanelMenu.Button {
     _init() {
+      logInfo("Colosseum panel_menu.js _init() called");
       super._init(0.0, "colosseum", false);
-
       this._scores = [];
       this._nextGames = [];
       this._nextGamesMissingApiKey = false;
       this._timeout = null;
       this._settings = null;
       this._scheduleCache = new Map();
-
       this._panelBoxLayout = new St.BoxLayout({ reactive: true, track_hover: false });
       this._icon = new St.Icon({
         gicon: Gio.icon_new_for_string(
@@ -51,12 +49,9 @@ export const Colosseum = GObject.registerClass(
     }
 
     setSettings(settings, constants) {
+      logInfo("Colosseum panel_menu.js setSettings() called");
       this._settings = settings;
       this._constants = constants;
-      this._settings.connect(
-        "changed::" + CONSTANTS.PREF_POSITION_TOPBAR,
-        () => { this._updatePositionInPanel(); }
-      );
       this._settings.connect(
         "changed::" + CONSTANTS.PREF_FOLLOWED_ONLY,
         () => { this._update(); }
@@ -389,16 +384,14 @@ export const Colosseum = GObject.registerClass(
     }
 
     async _update() {
+      logInfo("Colosseum panel_menu.js _update() called");
       await this._loadData();
       let menus = this._createMenu();
       this.menu.removeAll();
-
       for (let i = 0; i < menus.length; i++) {
         this.menu.addMenuItem(menus[i]);
       }
-
       this._setTopBarText();
-
       // Removed periodic updates to disable live monitoring
     }
 
@@ -480,22 +473,6 @@ export const Colosseum = GObject.registerClass(
       }
 
       this._menuText.set_text(labelText);
-    }
-
-    _updatePositionInPanel() {
-      this.container.get_parent().remove_actor(this.container);
-
-      let boxes = {
-        left: Main.panel._leftBox,
-        center: Main.panel._centerBox,
-        right: Main.panel._rightBox,
-      };
-
-      let position =
-        this._settings.get_int(CONSTANTS.PREF_POSITION_TOPBAR) == 0
-          ? "left"
-          : "right";
-      boxes[position].insert_child_at_index(this.container, 1);
     }
 
     destroy() {

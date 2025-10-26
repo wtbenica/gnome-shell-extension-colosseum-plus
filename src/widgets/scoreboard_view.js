@@ -1,4 +1,4 @@
-import { getAccentColor } from './accent_utils.js';
+import { getAccentColor } from '../utils/accent_color.js';
 
 /**
  * ScoreboardView: Renders games and leagues into GNOME Shell menu layouts.

@@ -1,9 +1,9 @@
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
-import { getConstants, PREF_POSITION_TOPBAR } from "./const.js";
-import { Colosseum } from "./widgets/colosseum.js";
-import DataLoader from "./data.js";
-import { logErr } from "./logging/error_utils.js";
+import { getConstants, PREF_POSITION_TOPBAR } from "./config/const.js";
+import { Colosseum } from "./widgets/panel_menu.js";
+import DataLoader from "./data/data_loader.js";
+import { logErr } from "./utils/logging.js";
 export default class ColosseumExtension extends Extension {
     async enable() {
         const tEnableStart = Date.now();
@@ -32,9 +32,7 @@ export default class ColosseumExtension extends Extension {
         }).catch(error => {
             logErr(error, 'Colosseum extension: Failed to update scores');
         });
-        Main.panel.addToStatusArea("colosseum", this.scores, 1, this.scores._settings.get_int(PREF_POSITION_TOPBAR) == 0
-            ? "left"
-            : "right");
+        Main.panel.addToStatusArea("colosseum", this.scores, 1, "right");
     }
     async checkForDataUpdates() {
         try {

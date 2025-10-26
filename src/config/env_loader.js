@@ -1,7 +1,7 @@
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 
-import { logErr } from "./logging/error_utils.js";
+import { logErr } from "../utils/logging.js";
 
 /**
  * Load environment variables from .env file

@@ -1,6 +1,6 @@
 // TypeScript version of ColosseumClient
 
-import DataLoader from "./data.js";
+import DataLoader from "../data/data_loader.js";
 
 export interface ColosseumConstants {
   PREF_LEAGUES: Record<string, string>;

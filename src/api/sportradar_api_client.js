@@ -1,8 +1,8 @@
 import GLib from "gi://GLib";
 import Soup from "gi://Soup";
 
-import { logErr, logInfo, logFile } from "./logging/error_utils.js";
-import { ApiCache } from "./cache.js";
+import { logErr, logInfo, logFile } from "../utils/logging.js";
+import { ApiCache } from "../data/api_cache.js";
 
 /**
  * Sportradar API client for soccer data

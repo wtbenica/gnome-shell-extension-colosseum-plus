@@ -1,6 +1,6 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { logErr, logInfo } from './logging/error_utils.js';
+import { logErr, logInfo } from '../utils/logging.js';
 
 const CACHE_VERSION = 1;
 const CACHE_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension']);

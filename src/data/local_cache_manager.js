@@ -1,7 +1,7 @@
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 
-import { logErr } from "./logging/error_utils.js";
+import { logErr } from "../utils/logging.js";
 
 const CACHE_FILE = GLib.get_user_cache_dir() + '/colosseum-data.json';
 const CACHE_DURATION_DAYS = 30;

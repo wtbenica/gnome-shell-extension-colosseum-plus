@@ -1,5 +1,5 @@
-import DataLoader from "./data.js";
-import { logErr } from "./logging/error_utils.js";
+import DataLoader from "../data/data_loader.js";
+import { logErr } from "../utils/logging.js";
 
 let constantsPromise = null;
 let loadedConstants = null;

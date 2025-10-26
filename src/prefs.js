@@ -4,7 +4,7 @@ import Adw from "gi://Adw";
 import Gio from "gi://Gio";
 import Gtk from "gi://Gtk";
 
-import { PREF_UPDATE_FREQ, PREF_FOLLOWED_ONLY, PREF_COMPACT_MODE, PREF_SHOW_NEXT_GAMES, PREF_POSITION_TOPBAR } from "./const.js";
+import { PREF_UPDATE_FREQ, PREF_FOLLOWED_ONLY, PREF_COMPACT_MODE, PREF_SHOW_NEXT_GAMES, PREF_POSITION_TOPBAR } from "./config/const.js";
 
 const EXT_PATH = import.meta.url;
 

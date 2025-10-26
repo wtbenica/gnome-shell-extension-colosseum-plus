@@ -2,10 +2,10 @@ import GLib from "gi://GLib";
 import Soup from "gi://Soup";
 import Gio from "gi://Gio";
 
-import { CacheManager } from "./cache_manager.js";
-import { loadEnv } from "./env_loader.js";
-import { SportradarClient } from "./sportradar_client.js";
-import { logErr } from "./logging/error_utils.js";
+import { CacheManager } from "./local_cache_manager.js";
+import { loadEnv } from "../config/env_loader.js";
+import { SportradarClient } from "../api/sportradar_api_client.js";
+import { logErr } from "../utils/logging.js";
 
 const env = loadEnv();
 const SPORT_RADAR_KEY = env.SPORT_RADAR_KEY;
