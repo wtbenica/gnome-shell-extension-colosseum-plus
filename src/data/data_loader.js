@@ -1,7 +1,3 @@
-import GLib from "gi://GLib";
-import Soup from "gi://Soup";
-import Gio from "gi://Gio";
-
 import { CacheManager } from "./local_cache_manager.js";
 import { loadEnv } from "../config/env_loader.js";
 import { SportradarClient } from "../api/sportradar_api_client.js";
@@ -91,82 +87,92 @@ class DataLoaderClass {
     return [];
   }
 
+  // Helper: normalize different wrappers to a sport_event object
+  _normalizeSportEvent(item) {
+    return item && (item.sport_event || item.sport_event || item) || item;
+  }
+
+  // Helper: derive an event id for deduplication
+  _getEventId(se) {
+    return se.id || se.sport_event_id || se.sport_event?.id || JSON.stringify(se);
+  }
+
+  // Helper: parse timestamp from various possible fields, return null if invalid
+  _parseEventTimestamp(se) {
+    const dateStr = se.scheduled || se.start_time || se.start || se.sport_event?.scheduled || se.sport_event?.start;
+    if (!dateStr) return null;
+    const ts = Date.parse(dateStr);
+    return Number.isNaN(ts) ? null : ts;
+  }
+
+  // Helper: get competitors array in normalized form
+  _getCompetitors(se) {
+    const comps = se.competitors || se.sport_event?.competitors || se.competitors || [];
+    return Array.isArray(comps) ? comps : [];
+  }
+
+  // Helper: construct a normalized team object
+  _makeTeamObj(comp) {
+    const id = String(comp.id || comp.urn || comp._id || comp.uid || '');
+    const name = comp.name || comp.common_name || comp.original_name || '';
+    return {
+      id,
+      team: name,
+      teamAbbr: (name || '').substring(0, 3).toUpperCase(),
+      score: '',
+      isWinner: false,
+      isLoser: false,
+    };
+  }
+
   /**
    * Fetch schedules for a competitor (team) and convert to internal event shape.
    * Returns an array of event objects similar to client.parseEvent's output.
    */
   async fetchCompetitorSchedules(competitorId, daysAhead = 7) {
     try {
-      const schedules = await this.sportradarClient.getCompetitorSchedules(competitorId);
+      const schedules = await this.sportradarClient.getCompetitorSchedules(competitorId) || [];
 
       const events = [];
       const seen = new Set();
 
-  const now = Date.now();
-  const limitTs = now + daysAhead * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const limitTs = now + daysAhead * 24 * 60 * 60 * 1000;
 
       for (const item of schedules) {
-        // normalize to sport_event object if wrapped
-        const se = item.sport_event || item.sport_event || item;
-
-        // try to get an id
-        const evId = se.id || se.sport_event_id || se.sport_event?.id || JSON.stringify(se);
+        const se = this._normalizeSportEvent(item);
+        const evId = this._getEventId(se);
         if (seen.has(evId)) continue;
         seen.add(evId);
 
-        // extract timestamp
-        const dateStr = se.scheduled || se.start_time || se.start || se.sport_event?.scheduled || se.sport_event?.start;
-        if (!dateStr) continue;
-        const ts = Date.parse(dateStr);
-  if (isNaN(ts)) continue;
-  // Only include schedules between now (inclusive) and the limit timestamp
-  if (ts < now) continue; // skip past events
-  if (ts > limitTs) continue; // skip too-far in future
+        const ts = this._parseEventTimestamp(se);
+        if (!ts) continue;
+        if (ts < now || ts > limitTs) continue;
 
-        // extract competitors
-        const comps = se.competitors || se.sport_event?.competitors || se.competitors || [];
-        if (!Array.isArray(comps) || comps.length < 2) continue;
+        const comps = this._getCompetitors(se);
+        if (comps.length < 2) continue;
 
-        // heuristics: find home/away by qualifier or by order
-        let home = comps.find(c => c.qualifier === 'home') || comps[0];
-        let away = comps.find(c => c.qualifier === 'away') || comps[1];
+        const home = comps.find((c) => c.qualifier === 'home') || comps[0];
+        const away = comps.find((c) => c.qualifier === 'away') || comps[1];
 
-        const homeObj = {
-          id: String(home.id || home.urn || home._id || home.uid),
-          team: home.name || home.common_name || home.original_name || '',
-          teamAbbr: (home.name || '').substring(0,3).toUpperCase(),
-          score: '',
-          isWinner: false,
-          isLoser: false,
-        };
-
-        const awayObj = {
-          id: String(away.id || away.urn || away._id || away.uid),
-          team: away.name || away.common_name || away.original_name || '',
-          teamAbbr: (away.name || '').substring(0,3).toUpperCase(),
-          score: '',
-          isWinner: false,
-          isLoser: false,
-        };
+        const homeObj = this._makeTeamObj(home);
+        const awayObj = this._makeTeamObj(away);
 
         const meta = new Date(ts).toLocaleString(undefined, { hour: 'numeric', minute: 'numeric' });
 
-        const event = {
+        events.push({
           home: homeObj,
           away: awayObj,
-          meta: meta,
+          meta,
           timestamp: ts,
           link: null,
           live: false,
           isComplete: false,
-        };
-
-        events.push(event);
+        });
       }
 
-      // sort by timestamp
-      events.sort((a,b) => a.timestamp - b.timestamp);
-      return events;
+      events.sort((a, b) => a.timestamp - b.timestamp);
+      return events;G
     } catch (e) {
       logErr(e, 'DataLoader: Error fetching schedules for competitor ' + competitorId);
       return [];
@@ -191,20 +197,25 @@ class DataLoaderClass {
       // Add more mappings as needed
     };
 
-    for (const competition of competitions) {
-      const key = competitionMapping[competition.id];
-      if (key) {
-        PREF_LEAGUES[key] = `${key.toLowerCase().replace(/\s+/g, '')}-enabled`;
-        DISPLAY_NAME[key] = competition.name;
-        
-        // Fetch teams for this competition
-        const teams = await this.fetchCompetitionInfo(competition.id);
-        SPORTS[key] = teams.map(team => ({
-          id: team.id,
-          name: team.name,
-          pref: `${key.toLowerCase()}-${team.name.toLowerCase().replace(/\s+/g, '')}`,
-        }));
-      }
+    // Collect competitions that we care about, then fetch teams in parallel to avoid awaits inside loops
+    const relevant = competitions
+      .map((c) => ({ c, mapped: competitionMapping[c.id] }))
+      .filter((it) => it.mapped);
+
+    const teamFetchPromises = relevant.map(async ({ c, mapped }) => {
+      const teams = await this.fetchCompetitionInfo(c.id);
+      return { mapped, name: c.name, teams };
+    });
+
+    const results = await Promise.all(teamFetchPromises);
+    for (const res of results) {
+      PREF_LEAGUES[res.mapped] = `${res.mapped.toLowerCase().replace(/\s+/g, '')}-enabled`;
+      DISPLAY_NAME[res.mapped] = res.name;
+      SPORTS[res.mapped] = (res.teams || []).map((team) => ({
+        id: team.id,
+        name: team.name,
+        pref: `${res.mapped.toLowerCase()}-${team.name.toLowerCase().replace(/\s+/g, '')}`,
+      }));
     }
 
     // For tournaments, keep static for now

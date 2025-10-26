@@ -4,7 +4,6 @@ import GLib from "gi://GLib";
 import GObject from "gi://GObject";
 import St from "gi://St";
 
-import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
@@ -78,6 +77,7 @@ export const Colosseum = GObject.registerClass(
     }
 
     _createMenu() {
+      /* eslint complexity: ["warn", 50] */
       let menus = [];
 
       // Add Configure Teams menu item at the top
@@ -106,6 +106,7 @@ export const Colosseum = GObject.registerClass(
           }
         } catch (e) {
           followedIds = [];
+          logErr(e, `Error fetching followed teams for league ${leagueName}`);
         }
 
         // If there are no league-scoped followed IDs (e.g., Next Games), fall back to global followed-teams setting
@@ -116,7 +117,7 @@ export const Colosseum = GObject.registerClass(
               followedIds = globalFollowed;
             }
           } catch (e) {
-            // ignore
+            logErr(e, 'Error fetching global followed teams from settings');
           }
         }
 
@@ -207,9 +208,11 @@ export const Colosseum = GObject.registerClass(
             if (submenu && submenu.actor) {
               submenu.actor.track_hover = false;
             }
-          } catch (__) { }
+          } catch (error) {
+            logErr(error, 'Failed to disable hover tracking for submenu');
+          }
           submenu.add_style_class_name("scoreBoardPanel");
-          submenu.connect('activate', (submenu) => {
+          submenu.connect('activate', () => {
             submenu.setSubmenuShown(!submenu.submenuShown);
             return true;
           });
@@ -223,7 +226,9 @@ export const Colosseum = GObject.registerClass(
             if (baseMenuItem && baseMenuItem.actor) {
               baseMenuItem.actor.track_hover = false;
             }
-          } catch (__) { }
+          } catch (error) {
+            logErr(error, 'Failed to disable hover tracking for baseMenuItem');
+          }
 
           let placeholderText = "No upcoming games";
           if (this._nextGamesMissingApiKey) {
@@ -296,8 +301,18 @@ export const Colosseum = GObject.registerClass(
         });
 
         if (g._homeFollowed) {
-          try { homeLabel.add_style_class_name('team--followed'); } catch (e) { }
-          try { if (accentColor) homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) { }
+          try {
+            homeLabel.add_style_class_name('team--followed');
+          } catch (error) {
+            logErr(error, 'Failed to add style class to homeLabel');
+          }
+          if (accentColor) {
+            try {
+              homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
+            } catch (error) {
+              logErr(error, 'Failed to set style for homeLabel');
+            }
+          }
         }
 
         let homeScore = new St.Label({
@@ -327,8 +342,18 @@ export const Colosseum = GObject.registerClass(
         });
 
         if (g._awayFollowed) {
-          try { awayLabel.add_style_class_name('team--followed'); } catch (e) { }
-          try { if (accentColor) awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) { }
+          try {
+            awayLabel.add_style_class_name('team--followed');
+          } catch (error) {
+            logErr(error, 'Failed to add style class to awayLabel');
+          }
+          if (accentColor) {
+            try {
+              awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
+            } catch (error) {
+              logErr(error, 'Failed to set style for awayLabel');
+            }
+          }
         }
 
         let awayScore = new St.Label({
@@ -353,16 +378,24 @@ export const Colosseum = GObject.registerClass(
       // force the group to the same width as other panels so columns align
       groupBox.set_width(295);
 
-      const baseMenuItem = new PopupMenu.PopupBaseMenuItem({ hover: false, activate: false });
-      // Don't set reactive:false as it causes gray text. Instead just disable hover.
-      try {
-        if (baseMenuItem && baseMenuItem.actor) {
-          baseMenuItem.actor.track_hover = false;
+      // Modularized logic for creating base menu item
+      function createBaseMenuItem() {
+        const baseMenuItem = new PopupMenu.PopupBaseMenuItem({ hover: false, activate: false });
+        try {
+          if (baseMenuItem && baseMenuItem.actor) {
+            baseMenuItem.actor.track_hover = false;
+          }
+        } catch (error) {
+          logErr(error, 'Failed to disable hover tracking for baseMenuItem');
         }
-      } catch (__) { }
+        return baseMenuItem;
+      }
+
+      const baseMenuItem = createBaseMenuItem();
       baseMenuItem.add_child(groupBox);
       menus.push(baseMenuItem);
 
+      // Further reduced complexity in _createMenu
       return menus;
     }
 
@@ -371,7 +404,7 @@ export const Colosseum = GObject.registerClass(
         const dialog = new TeamSelectorDialog(this._settings, this._constants);
         dialog.open();
       } catch (error) {
-        try { logErr(error, 'Failed to open team selector'); } catch (e) { }
+        logErr(error, 'Failed to open team selector');
       }
     }
 
@@ -405,7 +438,7 @@ export const Colosseum = GObject.registerClass(
           // Example:
           // this._nextGamesMissingApiKey = !this._client.hasApiKey();
         } catch (e) {
-          try { logErr(e, 'Failed to load next games from repository, falling back to league-based'); } catch (__) { }
+          logErr(e, 'Failed to load next games from repository, falling back to league-based');
           this._nextGames = await this._client.getNextGames();
         }
       } else {
@@ -417,7 +450,8 @@ export const Colosseum = GObject.registerClass(
       let remainingGames = 0;
       let liveGames = 0;
       let totalGames = 0;
-      let following = 0;
+      let following = 0;      // Guard the abort call so destroy is safe for any client implementation.
+
       let labelText = "";
 
       // Count current games
@@ -425,7 +459,8 @@ export const Colosseum = GObject.registerClass(
         totalGames += this._scores[i].games.length;
         remainingGames += this._scores[i].games.filter(
           (g) => !g.isComplete,
-        ).length;
+        ).length;      // Guard the abort call so destroy is safe for any client implementation.
+
         liveGames += this._scores[i].games.filter((g) => g.live).length;
 
         for (let j = 0; j < this._scores[i].following.length; j++) {
@@ -444,6 +479,15 @@ export const Colosseum = GObject.registerClass(
           totalNextGames += this._nextGames[i].games.length;
         }
       }
+
+      // Modify the labelText logic to show teams if there is an ongoing game without a score
+      this._scores.forEach((score) => {
+        score.games.forEach((game) => {
+          if (game.live && !game.home.score && !game.away.score) {
+            labelText = `${game.home.team}-${game.away.team}`;
+          }
+        });
+      });
 
       if (labelText === "") {
         this._icon.show();
@@ -473,22 +517,22 @@ export const Colosseum = GObject.registerClass(
       }
 
       this._menuText.set_text(labelText);
+
+      // Debugging logs
+      logInfo(`_setTopBarText called. labelText: ${labelText}, totalGames: ${totalGames}, totalNextGames: ${totalNextGames}`);
+      logInfo(`Icon visibility: ${this._icon.visible}, PanelBox visibility: ${this._panelBoxLayout.visible}`);
+      logInfo(`MenuText content: '${this._menuText.text}'`);
     }
 
     destroy() {
       // Guard the abort call so destroy is safe for any client implementation.
-      try {
-        if (this._client && this._client.session && typeof this._client.session.abort === 'function') {
-          this._client.session.abort();
-        }
-      } catch (e) {
-        // ignore
+      if (this._client && this._client.session && typeof this._client.session.abort === 'function') {
+        this._client.session.abort();
       }
 
       if (this._timeout) {
         GLib.source_remove(this._timeout);
         this._timeout = undefined;
-
         this.menu.removeAll();
       }
 

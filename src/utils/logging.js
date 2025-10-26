@@ -224,11 +224,11 @@ export function logFile(endpoint, params = {}) {
     if (!dir.query_exists(null)) {
       dir.make_directory_with_parents(null);
     }
-    const logFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, 'api_calls.log']));
-    const [success, contents] = logFile.load_contents(null);
+    const apiLogFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, 'api_calls.log']));
+    const [success, contents] = apiLogFile.load_contents(null);
     const existingContent = success ? new TextDecoder().decode(contents) : '';
     const newContent = existingContent + logEntry;
-    logFile.replace_contents(
+    apiLogFile.replace_contents(
       newContent,
       null,
       false,
@@ -236,7 +236,12 @@ export function logFile(endpoint, params = {}) {
       null
     );
   } catch (e) {
-    // Silently fail if file logging fails
+    // Avoid calling logInfo here to prevent recursion (logInfo -> logToFile -> error)
+    try {
+      currentLogger.log(`[Colosseum] logFile: Failed to log API call ${endpoint} ${JSON.stringify(params)} - ${e}`);
+    } catch {
+      // Swallow to avoid recursive logging
+    }
   }
 }
 
@@ -259,8 +264,8 @@ function logToFile(message, level) {
       dir.make_directory_with_parents(null);
     }
     const logFileName = `${level}.log`;
-    const logFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, logFileName]));
-    const [success, contents] = logFile.load_contents(null);
+    const levelLogFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, logFileName]));
+    const [success, contents] = levelLogFile.load_contents(null);
     const existingContent = success ? new TextDecoder().decode(contents) : '';
     if (existingContent.length > 1024 * 1024) {
       const backupFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, `${logFileName}.1`]));
@@ -271,7 +276,7 @@ function logToFile(message, level) {
         Gio.FileCreateFlags.NONE,
         null
       );
-      logFile.replace_contents(
+      levelLogFile.replace_contents(
         message + '\n',
         null,
         false,
@@ -280,7 +285,7 @@ function logToFile(message, level) {
       );
     } else {
       const newContent = existingContent + message + '\n';
-      logFile.replace_contents(
+      levelLogFile.replace_contents(
         newContent,
         null,
         false,
@@ -289,7 +294,12 @@ function logToFile(message, level) {
       );
     }
   } catch (e) {
-    // Silently fail if file logging fails
+    // Avoid calling logInfo here to prevent recursion (logInfo -> logToFile -> error)
+    try {
+      currentLogger.log(`[Colosseum] logToFile: Failed to log message at level ${level}. ${e}`);
+    } catch {
+      // Swallow to avoid recursive logging
+    }
   }
 }
 

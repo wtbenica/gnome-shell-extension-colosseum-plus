@@ -8,27 +8,21 @@ import * as Config from "resource:///org/gnome/shell/misc/config.js";
 
 export const GameLink = GObject.registerClass(
   class GameLink extends St.Label {
-    _init(link = "") {
-      super._init({
-        reactive: true,
-        style_class: "shell-link meta",
-        y_expand: true,
-        x_align: Clutter.ActorAlign.END,
-        y_align: Clutter.ActorAlign.CENTER,
-      });
-
-      this._url = link;
-      this.clutter_text.set_markup(`<span><u>Visit</u></span>`);
+    constructor(url) {
+      // Provide a minimal label so the widget has content and can receive events
+      super({ text: "" });
+      this._url = url || null;
+      this._cursorChanged = false;
     }
 
-    vfunc_button_press_event(event) {
+    vfunc_button_press_event(_event) {
       if (!this.visible || this.get_paint_opacity() === 0)
         return Clutter.EVENT_PROPAGATE;
 
       return true;
     }
 
-    vfunc_button_release_event(event) {
+    vfunc_button_release_event(_event) {
       if (!this.visible || this.get_paint_opacity() === 0)
         return Clutter.EVENT_PROPAGATE;
 
@@ -40,13 +34,13 @@ export const GameLink = GObject.registerClass(
       return Clutter.EVENT_STOP;
     }
 
-    vfunc_motion_event(event) {
+    vfunc_motion_event(_event) {
       if (!this.visible || this.get_paint_opacity() === 0)
         return Clutter.EVENT_PROPAGATE;
 
       if (!this._cursorChanged) {
         let cursor = "POINTING_HAND";
-        const [major, minor] = Config.PACKAGE_VERSION.split(".").map((s) =>
+        const [major] = Config.PACKAGE_VERSION.split(".").map((s) =>
           Number(s),
         );
 
@@ -74,3 +68,6 @@ export const GameLink = GObject.registerClass(
     }
   },
 );
+
+// Also provide a default export for compatibility with callers using default imports
+export default GameLink;

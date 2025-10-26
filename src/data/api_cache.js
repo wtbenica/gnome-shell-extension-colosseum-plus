@@ -5,12 +5,10 @@ import { logErr, logInfo } from '../utils/logging.js';
 const CACHE_VERSION = 1;
 const CACHE_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension']);
 const MAX_CACHE_AGE_DAYS = 7; // Competition/season metadata
-const SCHEDULE_CACHE_DAYS = 7; // Game schedules
 
 /**
  * Persistent file-based cache for API responses.
  * Reduces API calls by caching competition metadata ([MAX_CACHE_AGE_DAYS] days) 
- * and schedules ([SCHEDULE_CACHE_DAYS] days).
  */
 export class ApiCache {
     constructor() {
@@ -86,10 +84,10 @@ export class ApiCache {
     /**
      * Store data in cache
      * @param {string} endpoint - API endpoint identifier
-     * @param {object} params - Parameters used in the API call
      * @param {any} payload - Data to cache
+     * @param {object} params - Parameters used in the API call, if any
      */
-    async set(endpoint, params = null, payload) {
+    async set(endpoint, payload, params = null) {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
 

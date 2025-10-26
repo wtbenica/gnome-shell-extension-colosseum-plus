@@ -17,3 +17,7 @@ declare module "resource:///org/gnome/shell/ui/checkBox.js";
 declare module "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
 declare module "resource:///org/gnome/shell/extensions/extension.js";
+
+declare module 'example-module' {
+  export const example: string;
+}

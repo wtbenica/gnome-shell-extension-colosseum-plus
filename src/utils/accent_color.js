@@ -1,5 +1,7 @@
 import Gio from 'gi://Gio';
 
+import { logErr } from '../utils/logging.js';
+
 // GNOME accent color names mapped to hex values
 export const ACCENT_MAP_LIGHT = {
   blue: "#81D0FF",
@@ -49,8 +51,8 @@ export function getAccentColor() {
       const normalized = accentName.trim().toLowerCase();
       return ACCENT_MAP_LIGHT[normalized] || '#3584E4'; // fallback to blue
     }
-  } catch (e) {
-    // ignore and fall back
+  } catch (error) {
+    logErr(error, 'Error message');
   }
   return '#3584E4'; // default blue
 }

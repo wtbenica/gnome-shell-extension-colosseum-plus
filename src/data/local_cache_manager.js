@@ -19,21 +19,21 @@ export class CacheManager {
    * Load cache from disk
    */
   load() {
-    
+
     try {
       const cacheFile = Gio.File.new_for_path(CACHE_FILE);
-      
+
       if (cacheFile.query_exists(null)) {
         const [success, contents] = cacheFile.load_contents(null);
-        
+
         if (success) {
           const text = this._decoder.decode(contents);
           const parsed = JSON.parse(text);
-          
-            'leagues:', parsed.leagues?.length || 0,
+
+          'leagues:', parsed.leagues?.length || 0,
             'rawCompetitions:', parsed.rawCompetitions?.length || 0,
             'teams:', Object.keys(parsed.teams || {}).length;
-          
+
           // Handle legacy cache shape: some older saves stored competitions in `teams` by mistake.
           // If rawCompetitions is empty but teams is an array of competition-like objects,
           // migrate them into rawCompetitions and make teams an object map.
@@ -50,14 +50,12 @@ export class CacheManager {
           }
 
           return parsed;
-        } else {
         }
-      } else {
       }
     } catch (error) {
       logErr(error, 'CacheManager: Failed to load cache');
     }
-    
+
     return {
       lastUpdate: 0,
       leagues: [],
@@ -75,7 +73,7 @@ export class CacheManager {
       if (!cacheDir.query_exists(null)) {
         cacheDir.make_directory_with_parents(null);
       }
-      
+
       const cacheFile = Gio.File.new_for_path(CACHE_FILE);
       const data = JSON.stringify({
         lastUpdate: Date.now(),
@@ -83,18 +81,14 @@ export class CacheManager {
         teams: teams || {},
         rawCompetitions: rawCompetitions || []
       });
-      
-      const [success] = cacheFile.replace_contents(
+
+      cacheFile.replace_contents(
         data,
         null,
         false,
         Gio.FileCreateFlags.NONE,
         null
       );
-      
-      if (!success) {
-      } else {
-      }
     } catch (error) {
       logErr(error, 'CacheManager: Failed to save cache');
     }

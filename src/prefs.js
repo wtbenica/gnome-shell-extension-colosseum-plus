@@ -1,6 +1,5 @@
 import { ExtensionPreferences } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
-import Adw from "gi://Adw";
 import Gio from "gi://Gio";
 import Gtk from "gi://Gtk";
 
@@ -60,7 +59,7 @@ class Preferences {
 
 export default class ColosseumPreferences extends ExtensionPreferences {
   fillPreferencesWindow(window) {
-    let preferences = new Preferences(
+    new Preferences(
       window,
       this.getSettings("org.gnome.shell.extensions.colosseum"),
     );

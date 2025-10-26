@@ -17,20 +17,31 @@ export class Repository {
     const followed = this._settings.get_strv('followed-teams') || [];
     const eventsByLeague = new Map();
     const seenEvents = new Set();
-    for (const teamId of followed) {
-      const CACHE_TTL_MS = 10 * 60 * 1000;
-      let teamEvents = [];
+    const CACHE_TTL_MS = 10 * 60 * 1000;
+    // Fetch schedules in parallel to avoid awaiting inside the loop
+    const teamPromises = followed.map(async (teamId) => {
       try {
         const cached = this._scheduleCache.get(teamId);
         if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-          teamEvents = cached.events;
-        } else {
-          teamEvents = await this._client.getTeamSchedule(teamId);
-          this._scheduleCache.set(teamId, { ts: Date.now(), events: teamEvents });
+          return cached.events;
         }
-      } catch (e) {
-        teamEvents = await this._client.getTeamSchedule(teamId);
+        const teamEvents = await this._client.getTeamSchedule(teamId);
+        this._scheduleCache.set(teamId, { ts: Date.now(), events: teamEvents });
+        return teamEvents;
+      } catch (err) {
+        console.warn('Error fetching schedule (first attempt):', teamId, err);
+        // fallback: try once more, otherwise return empty
+        try {
+          return await this._client.getTeamSchedule(teamId);
+        } catch (err2) {
+          console.warn('Failed to fetch schedule for', teamId, err2);
+          return [];
+        }
       }
+    });
+
+    const teamResults = await Promise.all(teamPromises);
+    for (const teamEvents of teamResults) {
       for (const ev of teamEvents) {
         const key = `${ev.timestamp}-${ev.home.team}-${ev.away.team}`;
         if (seenEvents.has(key)) continue;

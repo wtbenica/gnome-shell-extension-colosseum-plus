@@ -1,5 +1,3 @@
-// TypeScript version of ColosseumClient
-
 import DataLoader from "../data/data_loader.js";
 
 export interface ColosseumConstants {
@@ -11,9 +9,13 @@ export interface ColosseumConstants {
 }
 
 export interface Settings {
-  get_boolean(key: string): boolean;
-  get_strv(key: string): string[];
-  get_int?(key: string): number;
+  get_boolean(_key: string): boolean;
+  get_strv(_key: string): string[];
+  get_int?(_key: string): number;
+}
+
+export interface ExampleInterface {
+  property: string;
 }
 
 export default class ColosseumClient {

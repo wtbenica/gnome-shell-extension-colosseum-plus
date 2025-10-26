@@ -1,7 +1,22 @@
 {
   "name": "gnome-shell-extension-colosseum",
+  "type": "module",
   "packageManager": "yarn@4.10.3",
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0",
+    "prettier": "^3.6.2",
+    "typescript": "5.9.3"
+  },
+  "dependenciesMeta": {
+    "@eslint/eslintrc@3.3.1": {
+      "unplugged": true
+    }
+  },
+  "scripts": {
+    "lint": "eslint src/ --ext .js,.ts",
+    "lint:fix": "eslint src/ --ext .js,.ts --fix",
+    "clean": "rm -rf node_modules .yarn/cache .yarn/unplugged .yarn/build-state.json"
   }
 }
