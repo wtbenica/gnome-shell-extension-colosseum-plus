@@ -1,5 +1,7 @@
 // TypeScript version of ColosseumClient
 
+import DataLoader from "./data.js";
+
 export interface ColosseumConstants {
   PREF_LEAGUES: Record<string, string>;
   PREF_TOURNAMENTS: Record<string, string>;
@@ -61,6 +63,15 @@ export default class ColosseumClient {
     return leagueTeams
       .filter(team => followedTeams.includes(String(team.id)))
       .map(team => String(team.id));
+  }
+
+  /**
+   * Fetches the schedule for a given team using DataLoader.
+   * @param teamId
+   * @returns Promise<Array<any>>
+   */
+  async getTeamSchedule(teamId: string | number): Promise<any[]> {
+    return await DataLoader.fetchCompetitorSchedules(teamId, 7);
   }
 
   isFollowOnlyEnabled(): boolean {

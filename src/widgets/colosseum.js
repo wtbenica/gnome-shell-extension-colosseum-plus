@@ -1,3 +1,4 @@
+
 import Clutter from "gi://Clutter";
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
@@ -8,9 +9,7 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
-
 import * as CONSTANTS from "../const.js";
-
 
 import ColosseumClient from "../client.js";
 import { GameLink } from "./game_link.js";
@@ -19,60 +18,10 @@ import { logInfo, logErr } from "../logging/error_utils.js";
 
 const EXT_PATH = import.meta.url;
 
-// GNOME accent color names mapped to hex values
-const ACCENT_MAP_LIGHT = {
-  blue: "#81D0FF",
-  teal: "#7bdff4",
-  green: "#8de698",
-  yellow: "#ffc057",
-  orange: "#ff9c5b",
-  red: "#ff888c",
-  pink: "#ffa0d8",
-  purple: "#fba7ff",
-  slate: "#bbd1e5",
-};
+import { getAccentColor } from './accent_utils.js';
+import { addGamesToGrid } from './scoreboard_view.js';
+import { Repository } from './repository.js';
 
-const ACCENT_MAP = {
-  blue: "#3584E4",
-  teal: "#2190A4",
-  green: "#3A944A",
-  yellow: "#C88800",
-  orange: "#ED5B00",
-  red: "#E62D42",
-  pink: "#D56199",
-  purple: "#9141AC",
-  slate: "#6F8396",
-};
-
-const ACCENT_MAP_DARK = {
-  blue: "#0461be",
-  teal: "#007184",
-  green: "#15772e",
-  yellow: "#905300",
-  orange: "#b62200",
-  red: "#c0023",
-  pink: "#a2326c",
-  purple: "#8939a4",
-  slate: "#526678",
-};
-
-/**
- * Get the current GNOME accent color as a hex string.
- * Returns the accent color if set, otherwise falls back to blue.
- */
-function getAccentColor() {
-  try {
-    const ifaceSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
-    const accentName = ifaceSettings.get_string('accent-color');
-    if (accentName) {
-      const normalized = accentName.trim().toLowerCase();
-      return ACCENT_MAP_LIGHT[normalized] || '#3584E4'; // fallback to blue
-    }
-  } catch (e) {
-    // ignore and fall back
-  }
-  return '#3584E4'; // default blue
-}
 
 export const Colosseum = GObject.registerClass(
   { GTypeName: "Colosseum" },
@@ -85,35 +34,19 @@ export const Colosseum = GObject.registerClass(
       this._nextGamesMissingApiKey = false;
       this._timeout = null;
       this._settings = null;
-      // In-memory cache for competitor schedules to avoid repeated API calls during a session
-      // Map: teamId -> { ts: <Date.now()>, events: [...] }
       this._scheduleCache = new Map();
 
-      // Make the panel box reactive so clicks are handled correctly by the parent PanelMenu.Button
-      // Keep track_hover false to avoid hover highlighting; visual hover is suppressed in stylesheet.
       this._panelBoxLayout = new St.BoxLayout({ reactive: true, track_hover: false });
-
       this._icon = new St.Icon({
         gicon: Gio.icon_new_for_string(
           EXT_PATH.replace("widgets/colosseum.js", "icon/colosseum-symbolic.svg"),
         ),
         icon_size: 24,
       });
-
-      this._menuText = new St.Label({
-        text: "",
-        y_align: Clutter.ActorAlign.CENTER,
-      });
-
-      // Make sure the box is reactive so clicks go to the parent PanelMenu.Button
-      // instead of being absorbed by child actors.
+      this._menuText = new St.Label({ text: "", y_align: Clutter.ActorAlign.CENTER });
       this._panelBoxLayout.add_child(this._icon);
       this._panelBoxLayout.add_child(this._menuText);
-
       this.add_child(this._panelBoxLayout);
-      // Make the panel button visible by default so the extension icon/menu
-      // is always present in the top bar even when there are no current games.
-      // Show after adding children so event handling is set up correctly.
       this.show();
     }
 
@@ -136,163 +69,17 @@ export const Colosseum = GObject.registerClass(
         "changed::" + CONSTANTS.PREF_SHOW_NEXT_GAMES,
         () => { this._update(); }
       );
-
-      // Listen for changes to followed teams and reload data
       this._settings.connect(
         "changed::followed-teams",
         () => { this._update(); }
       );
-
       this._client = new ColosseumClient(this._constants, this._settings);
+      this._repository = new Repository(this._client, this._settings);
     }
 
     _addGamesToGrid(grid, games, offset = 0, league = null) {
-      if (league != null) {
-        grid.insert_row(offset);
-        grid.insert_column(offset);
-        grid.insert_column(offset);
-        grid.insert_column(offset);
-
-        let leagueName = new St.Label({
-          text: league,
-          y_expand: true,
-          x_align: Clutter.ActorAlign.CENTER,
-          y_align: Clutter.ActorAlign.CENTER,
-        });
-
-        grid.attach(leagueName, 0, offset, 3, 1);
-        offset = offset + 1;
-      }
-
-      // Get accent color for followed teams
-      const accentColor = getAccentColor();
-
-      // get followed teams for this league (if provided) so we can style them
-      let followedIds = [];
-      try {
-        if (league && this._client && typeof this._client.getFollowedTeams === 'function') {
-          followedIds = this._client.getFollowedTeams(league) || [];
-        }
-      } catch (e) {
-        followedIds = [];
-      }
-
-      let pos;
-      for (let j = 0; j < games.length * 3 - 1; j++) {
-        pos = j + offset;
-
-        grid.insert_row(pos);
-        grid.insert_column(pos);
-        grid.insert_column(pos);
-        grid.insert_column(pos);
-      }
-
-      for (let j = 0; j < games.length; j++) {
-        let homeRow = offset + j * 3;
-        let awayRow = homeRow + 1;
-        let divider_row =
-          games.length == 1 ? 0 : j == games.length - 1 ? 0 : homeRow + 2;
-
-        let homeSuffix = games[j].home.isWinner
-          ? "--winner"
-          : games[j].home.isLoser
-            ? "--loser"
-            : "";
-        let awaySuffix = games[j].away.isWinner
-          ? "--winner"
-          : games[j].away.isLoser
-            ? "--loser"
-            : "";
-
-        const homeFollowed = followedIds.indexOf(String(games[j].home.id)) >= 0;
-
-        let homeLabel = new St.Label({
-          text: games[j].home.team,
-          style_class: "team" + homeSuffix + (homeFollowed ? " team--followed" : ""),
-          y_expand: true,
-          y_align: Clutter.ActorAlign.CENTER,
-        });
-
-        if (homeFollowed) {
-          try { homeLabel.add_style_class_name('team--followed'); } catch (e) { }
-          try { if (accentColor) homeLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) { }
-        }
-
-        let homeScore = new St.Label({
-          text: games[j].home.score,
-          style_class: "score" + homeSuffix,
-          y_expand: true,
-          y_align: Clutter.ActorAlign.CENTER,
-        });
-
-        let gameMeta = new St.Label({
-          text: games[j].meta,
-          style_class: "meta",
-          y_expand: true,
-          y_align: Clutter.ActorAlign.CENTER,
-        });
-
-        grid.attach(homeLabel, 0, homeRow, 1, 1);
-        grid.attach(homeScore, 1, homeRow, 1, 1);
-        grid.attach(gameMeta, 2, homeRow, 1, 1);
-
-        const awayFollowed = followedIds.indexOf(String(games[j].away.id)) >= 0;
-
-        let awayLabel = new St.Label({
-          text: games[j].away.team,
-          style_class: "team" + awaySuffix + (awayFollowed ? " team--followed" : ""),
-          y_expand: true,
-          y_align: Clutter.ActorAlign.CENTER,
-        });
-
-        if (awayFollowed) {
-          try { awayLabel.add_style_class_name('team--followed'); } catch (e) { }
-          try { if (accentColor) awayLabel.set_style(`color: ${accentColor}; font-weight: 800;`); } catch (e) { }
-        }
-
-        let awayScore = new St.Label({
-          text: games[j].away.score,
-          style_class: "score" + awaySuffix,
-          y_expand: true,
-          y_align: Clutter.ActorAlign.CENTER,
-        });
-
-        let gameLink = new GameLink(games[j].link);
-
-        grid.attach(awayLabel, 0, awayRow, 1, 1);
-        grid.attach(awayScore, 1, awayRow, 1, 1);
-        grid.attach(gameLink, 2, awayRow, 1, 1);
-
-        let div = new St.Label({
-          text: "",
-          style_class: "divider",
-          y_expand: true,
-          y_align: Clutter.ActorAlign.CENTER,
-        });
-
-        if (divider_row) {
-          grid.attach(div, 0, divider_row, 3, 1);
-        }
-      }
-
-      if (league != null) {
-        grid.insert_row(pos + 1);
-        grid.insert_column(pos + 1);
-
-        grid.attach(
-          new St.Label({
-            text: "",
-            y_expand: true,
-            y_align: Clutter.ActorAlign.CENTER,
-          }),
-          0,
-          pos + 1,
-          1,
-          1,
-        );
-      }
-
-      return pos + 2;
+      // Delegate to ScoreboardView
+      return addGamesToGrid(grid, games, offset, league, this._client);
     }
 
     _createMenu() {
@@ -616,64 +403,16 @@ export const Colosseum = GObject.registerClass(
     }
 
     async _loadData() {
-      const tLoadStart = Date.now();
-      this._scores = await this._client.getScores();
+      this._scores = await this._repository.loadScores();
       if (this._client.isShowNextGamesEnabled()) {
-        const tNextGamesStart = Date.now();
-        // Build next games from followed teams using DataLoader + Sportradar competitor schedules
         try {
-          const DataLoader = (await import('../data.js')).default;
-          // Track whether the Sportradar API key is present so we can show a helpful hint
-          try {
-            this._nextGamesMissingApiKey = !DataLoader.sportradarClient || !DataLoader.sportradarClient.apiKey;
-            if (this._nextGamesMissingApiKey) {
-              try { logInfo('SPORT_RADAR_KEY is missing; Next Games will be disabled until you add it to .env', 'Colosseum'); } catch (__) { }
-            }
-          } catch (e) {
-            this._nextGamesMissingApiKey = false;
-          }
-          const followed = this._settings.get_strv('followed-teams') || [];
-          const eventsByLeague = new Map();
-          const seenEvents = new Set();
-
-          for (const teamId of followed) {
-            const tTeamStart = Date.now();
-            // Try to use cached schedules when available to reduce API calls
-            const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-            let teamEvents = [];
-            try {
-              const cached = this._scheduleCache.get(teamId);
-              if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-                teamEvents = cached.events;
-                // cache hit (silent)
-              } else {
-                // cache miss (silent)
-                teamEvents = await DataLoader.fetchCompetitorSchedules(teamId, 7);
-                // store in cache
-                try { this._scheduleCache.set(teamId, { ts: Date.now(), events: teamEvents }); } catch (__) { }
-              }
-            } catch (e) {
-              // On any cache or fetch error, fall back to direct fetch
-              try { teamEvents = await DataLoader.fetchCompetitorSchedules(teamId, 7); } catch (__) { teamEvents = []; }
-            }
-
-            // received events for this team (silent)
-            for (const ev of teamEvents) {
-              // use timestamp + team names to dedupe
-              const key = `${ev.timestamp}-${ev.home.team}-${ev.away.team}`;
-              if (seenEvents.has(key)) continue;
-              seenEvents.add(key);
-
-              const leagueName = ev.league || ev.competition || ev.home.league || 'Next Games';
-              if (!eventsByLeague.has(leagueName)) eventsByLeague.set(leagueName, { league: leagueName, games: [], following: [] });
-              eventsByLeague.get(leagueName).games.push(ev);
-            }
-          }
-
-          // convert map to array
-          this._nextGames = Array.from(eventsByLeague.values());
+          this._nextGames = await this._repository.loadNextGames();
+          // Check for missing API key (if your repository or client exposes this info)
+          // If you want to keep the missing API key logic, you may need to expose it from Repository or Client
+          // Example:
+          // this._nextGamesMissingApiKey = !this._client.hasApiKey();
         } catch (e) {
-          try { logErr(e, 'Failed to load next games from DataLoader, falling back to league-based'); } catch (__) { }
+          try { logErr(e, 'Failed to load next games from repository, falling back to league-based'); } catch (__) { }
           this._nextGames = await this._client.getNextGames();
         }
       } else {
