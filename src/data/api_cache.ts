@@ -1,6 +1,6 @@
-import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
-import { logErr, logInfo } from '../utils/logging.js';
+import Gio from '@girs/gio-2.0';
+import GLib from '@girs/glib-2.0';
+import { logErr, logWarn } from '../utils/logging.js';
 
 const CACHE_VERSION = 1;
 const CACHE_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension']);
@@ -20,19 +20,19 @@ export class ApiCache {
         if (!dir.query_exists(null)) {
             try {
                 dir.make_directory_with_parents(null);
-                logInfo('Created cache directory', 'ApiCache');
+                logWarn('Created cache directory', 'ApiCache');
             } catch (e) {
                 logErr(e, 'Failed to create cache directory');
             }
         }
     }
 
-    _getCacheKey(endpoint: string, params: any): string {
+    _getCacheKey(endpoint: string, params: unknown): string {
         const paramStr = JSON.stringify(params || {});
         return `${endpoint}_${GLib.compute_checksum_for_string(GLib.ChecksumType.MD5, paramStr, -1)}`;
     }
 
-    _getCacheFile(key: string): any {
+    _getCacheFile(key: string): Gio.File {
         return Gio.File.new_for_path(GLib.build_filenamev([CACHE_DIR, `${key}.json`]));
     }
 
@@ -41,9 +41,9 @@ export class ApiCache {
      * @param {string} endpoint - API endpoint identifier
      * @param {object} params - Parameters used in the API call
      * @param {number} maxAgeDays - Maximum age in days before cache expires
-     * @returns {Promise<any|null>} Cached data or null if not found/expired
+     * @returns {Promise<unknown|null>} Cached data or null if not found/expired
      */
-    async get(endpoint: string, params: any = null, maxAgeDays: number = MAX_CACHE_AGE_DAYS): Promise<any | null> {
+    async get(endpoint: string, params: unknown = null, maxAgeDays: number = MAX_CACHE_AGE_DAYS): Promise<unknown | null> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
 
@@ -60,7 +60,7 @@ export class ApiCache {
 
             // Check cache version
             if (data.version !== CACHE_VERSION) {
-                logInfo(`Cache version mismatch for ${endpoint}, invalidating`, 'ApiCache');
+                logWarn(`Cache version mismatch for ${endpoint}, invalidating`, 'ApiCache');
                 file.delete(null);
                 return null;
             }
@@ -69,7 +69,7 @@ export class ApiCache {
             const ageMs = Date.now() - data.timestamp;
             const ageDays = ageMs / (1000 * 60 * 60 * 24);
             if (ageDays > maxAgeDays) {
-                logInfo(`Cache expired for ${endpoint} (${ageDays.toFixed(1)} days old)`, 'ApiCache');
+                logWarn(`Cache expired for ${endpoint} (${ageDays.toFixed(1)} days old)`, 'ApiCache');
                 file.delete(null);
                 return null;
             }
@@ -84,10 +84,10 @@ export class ApiCache {
     /**
      * Store data in cache
      * @param {string} endpoint - API endpoint identifier
-     * @param {any} payload - Data to cache
+     * @param {unknown} payload - Data to cache
      * @param {object} params - Parameters used in the API call, if any
      */
-    async set(endpoint: string, payload: any, params: any = null): Promise<void> {
+    async set(endpoint: string, payload: unknown, params: unknown = null): Promise<void> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
 
@@ -116,14 +116,14 @@ export class ApiCache {
     /**
      * Invalidate a specific cache entry
      */
-    async invalidate(endpoint: string, params: any = null): Promise<void> {
+    async invalidate(endpoint: string, params: unknown = null): Promise<void> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
         
         if (file.query_exists(null)) {
             try {
                 file.delete(null);
-                logInfo(`Invalidated cache for ${endpoint}`, 'ApiCache');
+                logWarn(`Invalidated cache for ${endpoint}`, 'ApiCache');
             } catch (e) {
                 logErr(e, `Failed to delete cache for ${endpoint}`);
             }
@@ -151,7 +151,7 @@ export class ApiCache {
                 file.delete(null);
                 count++;
             }
-            logInfo(`Cleared ${count} cache entries`, 'ApiCache');
+            logWarn(`Cleared ${count} cache entries`, 'ApiCache');
         } catch (e) {
             logErr(e, 'Failed to clear cache directory');
         }

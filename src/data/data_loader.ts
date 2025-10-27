@@ -159,7 +159,7 @@ class DataLoaderClass {
    * @returns Promise resolving to filtered competitions array
    */
   private async _fetchCompetitionsFromAPI(): Promise<Competition[]> {
-    const competitions = await this.sportradarClient.getCompetitions();
+    const competitions = await this.sportradarClient.getCompetitions() as Competition[];
 
     if (competitions.length === 0) {
       return [];
@@ -222,8 +222,7 @@ class DataLoaderClass {
   private async _fetchCompetitionInfoFromAPI(
     competitionId: string
   ): Promise<Competitor[]> {
-    const competitionInfo =
-      await this.sportradarClient.getCompetitionInfo(competitionId);
+    const competitionInfo = await this.sportradarClient.getCompetitionInfo(competitionId) as { season?: { competitors?: Competitor[] } };
 
     if (
       !competitionInfo?.season?.competitors ||
@@ -269,7 +268,7 @@ class DataLoaderClass {
   ): Promise<Game[]> {
     try {
       const schedules =
-        (await this.sportradarClient.getCompetitorSchedules(competitorId)) ||
+        (await this.sportradarClient.getCompetitorSchedules(competitorId)) as unknown[] ||
         [];
       return this._convertSchedulesToGames(schedules, daysAhead);
     } catch (e) {
@@ -286,7 +285,7 @@ class DataLoaderClass {
    * @returns Array of game events
    */
   private _convertSchedulesToGames(
-    schedules: any[],
+    schedules: unknown[],
     daysAhead: number
   ): Game[] {
     const events: Game[] = [];
@@ -315,7 +314,7 @@ class DataLoaderClass {
    * @returns Game event or null if invalid
    */
   private _parseScheduleItem(
-    item: any,
+    item: unknown,
     now: number,
     limitTs: number,
     seen: Set<string>
@@ -341,9 +340,16 @@ class DataLoaderClass {
     const home = comps.find((c) => c.qualifier === "home") || comps[0];
     const away = comps.find((c) => c.qualifier === "away") || comps[1];
 
+    const homeTeam = this._makeTeamObj(home);
+    const awayTeam = this._makeTeamObj(away);
+
+    // Set league from raw data if available
+    homeTeam.league = (item as { home?: { league?: string } }).home?.league;
+    awayTeam.league = (item as { away?: { league?: string } }).away?.league;
+
     return {
-      home: this._makeTeamObj(home),
-      away: this._makeTeamObj(away),
+      home: homeTeam,
+      away: awayTeam,
       meta: new Date(ts).toLocaleString(undefined, {
         hour: "numeric",
         minute: "numeric",
@@ -352,6 +358,8 @@ class DataLoaderClass {
       link: null,
       live: false,
       isComplete: false,
+      league: (item as { league?: string }).league,
+      competition: (item as { competition?: string }).competition,
     };
   }
 
@@ -361,8 +369,9 @@ class DataLoaderClass {
    * @param item - Raw event item
    * @returns Normalized sport event
    */
-  private _normalizeSportEvent(item: any): SportEvent {
-    return (item && (item.sport_event || item)) || item;
+  private _normalizeSportEvent(item: unknown): SportEvent {
+    const obj = item as { sport_event?: SportEvent };
+    return (obj && (obj.sport_event || obj)) || obj;
   }
 
   /**

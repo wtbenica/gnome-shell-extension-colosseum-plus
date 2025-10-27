@@ -15,6 +15,7 @@ export interface Team {
   score: string;
   isWinner: boolean;
   isLoser: boolean;
+  league?: string;
 }
 
 /**
@@ -28,6 +29,8 @@ export interface Game {
   link: string | null;
   live: boolean;
   isComplete: boolean;
+  league?: string;
+  competition?: string;
 }
 
 /**
@@ -49,7 +52,7 @@ export interface GameClient {
  * @returns The next available row offset after adding all games
  */
 export function addGamesToGrid(
-  grid: any,
+  grid: unknown,
   games: Game[],
   offset: number = 0,
   _league: string | null = null,
@@ -133,7 +136,7 @@ function createTeamLabel(
   teamName: string,
   isFollowed: boolean,
   accentColor: string | null
-): any {
+): unknown {
   const label = new St.Label({
     text: teamName,
     style_class: `team${isFollowed ? " team--followed" : ""}`,
@@ -159,7 +162,7 @@ function createTeamLabel(
  * @param isFollowed - Whether this team is followed by the user
  * @returns A configured St.Label for the score
  */
-function createScoreLabel(score: string, isFollowed: boolean): any {
+function createScoreLabel(score: string, isFollowed: boolean): unknown {
   return new St.Label({
     text: score,
     style_class: `score${isFollowed ? " score--followed" : ""}`,
@@ -174,7 +177,7 @@ function createScoreLabel(score: string, isFollowed: boolean): any {
  * @param meta - The metadata text to display
  * @returns A configured St.Label for the metadata
  */
-function createMetaLabel(meta: string): any {
+function createMetaLabel(meta: string): unknown {
   return new St.Label({
     text: meta,
     style_class: "meta",

@@ -2,29 +2,27 @@
   "compilerOptions": {
     "module": "ES2022",
     "moduleResolution": "bundler",
+    "rootDir": "./src",
+    "outDir": "./dist",
     "sourceMap": false,
     "strict": true,
     "target": "ES2022",
     "lib": [
       "ES2022"
     ],
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "allowJs": true,
-    "checkJs": false,
-    "resolveJsonModule": true,
-    "declaration": false,
-    "noEmitOnError": false,
     "types": [
       "@girs/gjs",
-      "@girs/gnome-shell"
-    ]
+      "@girs/gnome-shell/ambient"
+    ],
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*",
+    "ambient.d.ts"
+  ],
+  "files": [
     "ambient.d.ts"
   ],
   "exclude": [

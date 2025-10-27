@@ -1,16 +1,17 @@
-import GLib from "gi://GLib";
-import Gio from "gi://Gio";
+import GLib from "@girs/glib-2.0";
+import Gio from "@girs/gio-2.0";
 
 import { logErr } from "../utils/logging.js";
+import { Competition, Competitor } from "./data_loader.js";
 
 const CACHE_FILE = GLib.get_user_cache_dir() + '/colosseum-data.json';
 const CACHE_DURATION_DAYS = 30;
 
 interface CacheData {
   lastUpdate: number;
-  leagues: any[];
-  teams: Record<string, any[]>;
-  rawCompetitions: any[];
+  leagues: Competition[];
+  teams: Record<string, Competitor[]>;
+  rawCompetitions: Competition[];
 }
 
 /**
@@ -73,7 +74,7 @@ export class CacheManager {
   /**
    * Save cache to disk
    */
-  save(leagues: any[], teams: Record<string, any[]>, rawCompetitions: any[]): void {
+  save(leagues: Competition[], teams: Record<string, Competitor[]>, rawCompetitions: Competition[]): void {
     try {
       const cacheDir = Gio.File.new_for_path(GLib.get_user_cache_dir());
       if (!cacheDir.query_exists(null)) {
@@ -113,21 +114,21 @@ export class CacheManager {
   /**
    * Get cached competitions
    */
-  getRawCompetitions(): any[] {
+  getRawCompetitions(): Competition[] {
     return this.data.rawCompetitions || [];
   }
 
   /**
    * Get cached leagues
    */
-  getLeagues(): any[] {
+  getLeagues(): Competition[] {
     return this.data.leagues || [];
   }
 
   /**
    * Get cached teams for a league
    */
-  getTeams(leagueId: string): any[] {
+  getTeams(leagueId: string): Competitor[] {
     return this.data.teams?.[leagueId] || [];
   }
 }

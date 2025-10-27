@@ -13,7 +13,7 @@ import * as CONSTANTS from "../config/const.js";
 import ColosseumClient from "../api/colosseum_client.js";
 import { GameLink } from "./game_link.js";
 import { TeamSelectorDialog } from "./team_selector.js";
-import { logInfo, logErr } from "../utils/logging.js";
+import { logDebug, logErr } from "../utils/logging.js";
 import { getAccentColor } from "../utils/accent_color.js";
 import { addGamesToGrid, Game } from "./scoreboard_view.js";
 import { Repository, League } from "../data/repository.js";
@@ -40,12 +40,12 @@ export const Colosseum = GObject.registerClass(
     private _nextGames!: League[];
     private _nextGamesMissingApiKey!: boolean;
     private _timeout!: number | null;
-    private _settings!: any | null;
-    private _constants: any;
-    private _scheduleCache!: Map<string, any>;
-    private _panelBoxLayout!: any;
-    private _icon!: any;
-    private _menuText!: any;
+    private _settings!: unknown | null;
+    private _constants: unknown;
+    private _scheduleCache!: Map<string, unknown>;
+    private _panelBoxLayout!: unknown;
+    private _icon!: unknown;
+    private _menuText!: unknown;
     private _client!: ColosseumClient;
     private _repository!: Repository;
 
@@ -88,7 +88,7 @@ export const Colosseum = GObject.registerClass(
      * @param settings - GSettings instance for the extension
      * @param constants - Constants object containing preference keys
      */
-    setSettings(settings: any, constants: any): void {
+    setSettings(settings: unknown, constants: unknown): void {
       this._settings = settings;
       this._constants = constants;
 
@@ -121,7 +121,7 @@ export const Colosseum = GObject.registerClass(
      * Adds games to a grid layout (delegates to ScoreboardView)
      */
     private _addGamesToGrid(
-      grid: any,
+      grid: unknown,
       games: Game[],
       offset: number = 0,
       league: string | null = null
@@ -134,8 +134,8 @@ export const Colosseum = GObject.registerClass(
      * 
      * @returns Array of menu items
      */
-    private _createMenu(): any[] {
-      const menus: any[] = [];
+    private _createMenu(): unknown[] {
+      const menus: unknown[] = [];
 
       this._addConfigureTeamsMenuItem(menus);
       this._addSeparator(menus);
@@ -160,7 +160,7 @@ export const Colosseum = GObject.registerClass(
     /**
      * Adds "Configure Teams" menu item
      */
-    private _addConfigureTeamsMenuItem(menus: any[]): void {
+    private _addConfigureTeamsMenuItem(menus: unknown[]): void {
       const configureTeamsItem = new PopupMenu.PopupMenuItem("Configure Teams");
       configureTeamsItem.connect("activate", () => {
         this._openTeamSelector();
@@ -171,7 +171,7 @@ export const Colosseum = GObject.registerClass(
     /**
      * Adds a separator to the menu
      */
-    private _addSeparator(menus: any[]): void {
+    private _addSeparator(menus: unknown[]): void {
       menus.push(new PopupMenu.PopupSeparatorMenuItem());
     }
 
@@ -240,7 +240,7 @@ export const Colosseum = GObject.registerClass(
     /**
      * Adds compact mode games to the menu
      */
-    private _addCompactGames(menus: any[]): void {
+    private _addCompactGames(menus: unknown[]): void {
       const compactScores = this._scores.filter((s) => s.games.length === 1);
 
       if (compactScores.length === 0) return;
@@ -286,14 +286,14 @@ export const Colosseum = GObject.registerClass(
     /**
      * Adds placeholder for next games when none are available
      */
-    private _addNextGamesPlaceholder(menus: any[]): void {
+    private _addNextGamesPlaceholder(menus: unknown[]): void {
       if (!this._client?.isShowNextGamesEnabled?.()) return;
 
       const submenu = new PopupMenu.PopupSubMenuMenuItem("Next Games");
       this._disableHoverTracking(submenu);
       submenu.add_style_class_name("scoreBoardPanel");
       submenu.connect("activate", () => {
-        const isOpen = (submenu as any).menu?.isOpen || false;
+        const isOpen = (submenu as unknown as { menu?: { isOpen?: boolean } }).menu?.isOpen || false;
         submenu.setSubmenuShown(!isOpen);
         return true;
       });
@@ -317,7 +317,7 @@ export const Colosseum = GObject.registerClass(
      * Adds the flattened chronological games list to the menu
      */
     private _addGamesList(
-      menus: any[],
+      menus: unknown[],
       allGames: ExtendedGame[]
     ): void {
       const groupBox = new St.BoxLayout({
@@ -352,7 +352,7 @@ export const Colosseum = GObject.registerClass(
     /**
      * Adds a date header to the games list
      */
-    private _addDateHeader(container: any, timestamp: number): void {
+    private _addDateHeader(container: unknown, timestamp: number): void {
       const dateLabel = new St.Label({
         text: new Date(timestamp).toLocaleString(undefined, {
           weekday: "short",
@@ -378,7 +378,7 @@ export const Colosseum = GObject.registerClass(
      * Adds home and away rows for a game
      */
     private _addGameRows(
-      container: any,
+      container: unknown,
       game: ExtendedGame,
       accentColor: string | null
     ): void {
@@ -418,7 +418,7 @@ export const Colosseum = GObject.registerClass(
       isLoser: boolean,
       accentColor: string | null,
       isAwayRow: boolean = false
-    ): any {
+    ): unknown {
       const row = new St.BoxLayout({
         vertical: false,
         style_class: "score-row",
@@ -466,7 +466,7 @@ export const Colosseum = GObject.registerClass(
     /**
      * Adds a divider between games
      */
-    private _addDivider(container: any): void {
+    private _addDivider(container: unknown): void {
       const div = new St.Label({ text: "", style_class: "divider" });
       const divBox = new St.BoxLayout({
         vertical: false,
@@ -479,7 +479,7 @@ export const Colosseum = GObject.registerClass(
     /**
      * Creates a base menu item with hover disabled
      */
-    private _createBaseMenuItem(): any {
+    private _createBaseMenuItem(): unknown {
       const baseMenuItem = new PopupMenu.PopupBaseMenuItem({
         hover: false,
         activate: false,
@@ -491,7 +491,7 @@ export const Colosseum = GObject.registerClass(
     /**
      * Disables hover tracking for a menu item
      */
-    private _disableHoverTracking(item: any): void {
+    private _disableHoverTracking(item: unknown): void {
       try {
         if (item?.actor) {
           item.actor.track_hover = false;
@@ -533,9 +533,9 @@ export const Colosseum = GObject.registerClass(
     async _update(): Promise<void> {
       await this._loadData();
       const menus = this._createMenu();
-      (this.menu as any).removeAll();
+      (this.menu as unknown).removeAll();
       for (const menu of menus) {
-        (this.menu as any).addMenuItem(menu);
+        (this.menu as unknown).addMenuItem(menu);
       }
       this._setTopBarText();
     }
@@ -676,30 +676,30 @@ export const Colosseum = GObject.registerClass(
     /**
      * Logs the current top bar state for debugging
      */
-    private _logTopBarState(labelText: string, stats: any): void {
-      logInfo(
+    private _logTopBarState(labelText: string, stats: unknown): void {
+      logDebug(
         `_setTopBarText called. labelText: ${labelText}, totalGames: ${stats.totalGames}, totalNextGames: ${stats.totalNextGames}`,
         "panel_menu"
       );
-      logInfo(
+      logDebug(
         `Icon visibility: ${this._icon.visible}, PanelBox visibility: ${this._panelBoxLayout.visible}`,
         "panel_menu"
       );
-      logInfo(`MenuText content: '${this._menuText.text}'`, "panel_menu");
+      logDebug(`MenuText content: '${this._menuText.text}'`, "panel_menu");
     }
 
     /**
      * Cleanup when the extension is disabled
      */
     destroy(): void {
-      if (this._client && (this._client as any).session && typeof (this._client as any).session.abort === "function") {
-        (this._client as any).session.abort();
+      if (this._client && (this._client as unknown as { session?: { abort?: () => void } }).session && typeof (this._client as unknown as { session?: { abort?: () => void } }).session.abort === "function") {
+        (this._client as unknown as { session?: { abort?: () => void } }).session.abort();
       }
 
       if (this._timeout) {
         GLib.source_remove(this._timeout);
         this._timeout = null;
-        (this.menu as any).removeAll();
+        (this.menu as unknown).removeAll();
       }
 
       super.destroy();

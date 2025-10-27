@@ -1,4 +1,7 @@
+import Gio from '@girs/gio-2.0';
+
 import { Game } from "../widgets/scoreboard_view.js";
+import { logWarn } from '../utils/logging';
 
 /**
  * Represents a league with its games
@@ -32,7 +35,7 @@ interface ScheduleCacheEntry {
  */
 export class Repository {
   private _client: ScoresClient;
-  private _settings: any; // Gio.Settings
+  private _settings: Gio.Settings;
   private _scheduleCache: Map<string, ScheduleCacheEntry>;
   private static readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -42,7 +45,7 @@ export class Repository {
    * @param client - The client for fetching scores and schedules
    * @param settings - GSettings instance for reading configuration
    */
-  constructor(client: ScoresClient, settings: any) {
+  constructor(client: ScoresClient, settings: Gio.Settings) {
     this._client = client;
     this._settings = settings;
     this._scheduleCache = new Map();
@@ -76,18 +79,18 @@ export class Repository {
     for (const events of teamSchedules) {
       for (const event of events) {
         const eventKey = this._createEventKey(event);
-        
+
         if (seenEvents.has(eventKey)) {
           continue;
         }
-        
+
         seenEvents.add(eventKey);
         const leagueName = this._extractLeagueName(event);
-        
+
         if (!eventsByLeague.has(leagueName)) {
           eventsByLeague.set(leagueName, { league: leagueName, games: [] });
         }
-        
+
         eventsByLeague.get(leagueName)!.games.push(event);
       }
     }
@@ -106,7 +109,7 @@ export class Repository {
       try {
         return await this._fetchSingleTeamSchedule(teamId);
       } catch (err) {
-        console.warn(`Error fetching schedule for team ${teamId}:`, err);
+        logWarn(`Error fetching schedule for team ${teamId}: ${err}`);
         return await this._retryFetchSchedule(teamId);
       }
     });
@@ -128,7 +131,7 @@ export class Repository {
 
     const events = await this._client.getTeamSchedule(_teamId);
     this._scheduleCache.set(_teamId, { ts: Date.now(), events });
-    
+
     return events;
   }
 
@@ -142,7 +145,7 @@ export class Repository {
     try {
       return await this._client.getTeamSchedule(_teamId);
     } catch (err) {
-      console.warn(`Failed to fetch schedule for team ${_teamId} after retry:`, err);
+      logWarn(`Failed to fetch schedule for team ${_teamId} after retry: ${err}`);
       return [];
     }
   }
@@ -173,7 +176,7 @@ export class Repository {
    * @param event - The event to extract league name from
    * @returns The league name or a default value
    */
-  private _extractLeagueName(event: any): string {
+  private _extractLeagueName(event: Game): string {
     return (
       event.league ||
       event.competition ||

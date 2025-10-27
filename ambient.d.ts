@@ -5,18 +5,25 @@ import "@girs/gnome-shell/extensions/global";
 
 // Properly declare TextDecoder with its interface for GJS environments
 declare global {
+  interface TextDecoderOptions {
+    fatal?: boolean;
+    ignoreBOM?: boolean;
+  }
+
+  interface TextDecodeOptions {
+    stream?: boolean;
+  }
+
   const TextDecoder: {
-    new (label?: string, options?: TextDecoderOptions): TextDecoder;
-    prototype: TextDecoder;
+    new (label?: string, options?: TextDecoderOptions): ITextDecoder;
+    prototype: ITextDecoder;
   };
 
-  interface TextDecoder {
+  interface ITextDecoder {
     readonly encoding: string;
     readonly fatal: boolean;
     readonly ignoreBOM: boolean;
-    decode(input?: BufferSource | ArrayBufferView, options?: TextDecodeOptions): string;
+    decode(input?: ArrayBuffer | ArrayBufferView, options?: TextDecodeOptions): string;
   }
 }
-
 export {};
-

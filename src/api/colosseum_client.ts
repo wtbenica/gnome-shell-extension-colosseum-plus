@@ -1,4 +1,5 @@
 import DataLoader from "../data/data_loader.js";
+import { Game } from "../widgets/scoreboard_view.js";
 
 export interface ColosseumConstants {
   PREF_LEAGUES: Record<string, string>;
@@ -31,11 +32,11 @@ export default class ColosseumClient {
     this._tournaments = Object.keys(this._CONSTANTS.PREF_TOURNAMENTS || {});
   }
 
-  async getScores(): Promise<any[]> {
+  async getScores(): Promise<unknown[]> {
     return [];
   }
 
-  async getNextGames(): Promise<any[]> {
+  async getNextGames(): Promise<unknown[]> {
     return [];
   }
 
@@ -70,9 +71,9 @@ export default class ColosseumClient {
   /**
    * Fetches the schedule for a given team using DataLoader.
    * @param teamId
-   * @returns Promise<Array<any>>
+   * @returns Promise<Game[]>
    */
-  async getTeamSchedule(teamId: string | number): Promise<any[]> {
+  async getTeamSchedule(teamId: string | number): Promise<Game[]> {
     return await DataLoader.fetchCompetitorSchedules(String(teamId), 7);
   }
 

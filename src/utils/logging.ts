@@ -33,14 +33,14 @@
  * ```
  */
 
-import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
+import Gio from '@girs/gio-2.0';
+import GLib from '@girs/glib-2.0';
 
 /**
  * Logger interface for consistent logging implementations.
  */
 interface Logger {
-  log(...args: any[]): void;
+  log(...args: unknown[]): void;
   logError(error: Error, message: string): void;
 }
 
@@ -49,13 +49,15 @@ interface Logger {
  */
 const gjsLogger: Logger = {
   log(...args: unknown[]): void {
-    if (typeof (globalThis as any).log === "function") {
-      (globalThis as any).log(...args);
+    const globalLog = (globalThis as { log?: (...args: unknown[]) => void }).log;
+    if (globalLog) {
+      globalLog(...args);
     }
   },
   logError(error: Error, message?: string): void {
-    if (typeof (globalThis as any).logError === "function") {
-      (globalThis as any).logError(error, message);
+    const globalLogError = (globalThis as { logError?: (error: Error, message?: string) => void }).logError;
+    if (globalLogError) {
+      globalLogError(error, message);
     }
   },
 };
@@ -103,7 +105,7 @@ export function setLogger(logger: Logger) {
  * @internal This function is used internally by the public logging functions
  */
 function logMessage(
-  message: any,
+  message: unknown,
   context?: string,
   level: string = "error",
 ) {
@@ -150,7 +152,7 @@ function logMessage(
  * // Output: [Colosseum] Color parsing: Invalid color format '#gggggg'
  * ```
  */
-export function logErr(error: any, context?: string) {
+export function logErr(error: unknown, context?: string) {
   logMessage(error, context, 'error');
 }
 
@@ -169,7 +171,7 @@ export function logErr(error: any, context?: string) {
  * logWarn('Settings file not found, using defaults', 'Settings');
  * ```
  */
-export function logWarn(message: any, context?: string) {
+export function logWarn(message: unknown, context?: string) {
   logMessage(message, context, 'warn');
 }
 
@@ -186,7 +188,7 @@ export function logWarn(message: any, context?: string) {
  * logInfo('Extension initialized successfully');
  * ```
  */
-export function logInfo(message: any, context?: string) {
+export function logInfo(message: unknown, context?: string) {
   logMessage(message, context, 'info');
 }
 
@@ -204,7 +206,7 @@ export function logInfo(message: any, context?: string) {
  * logDebug('Processing team data', 'DataLoader');
  * ```
  */
-export function logDebug(message: any, context?: string) {
+export function logDebug(message: unknown, context?: string) {
   // Always log debug in GJS
   logMessage(message, context, 'debug');
 }
@@ -365,7 +367,7 @@ export function validateString(str: string, context: string = 'String validation
  * // Throws: Empty or invalid array provided for Teams list
  * ```
  */
-export function validateArray(arr: any[], context: string = 'Array validation') {
+export function validateArray(arr: unknown[], context: string = 'Array validation') {
   if (!Array.isArray(arr) || arr.length === 0) {
     throw new Error(`Empty or invalid array provided for ${context}`);
   }

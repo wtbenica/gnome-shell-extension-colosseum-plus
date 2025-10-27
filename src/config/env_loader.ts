@@ -1,5 +1,5 @@
-import GLib from "gi://GLib";
-import Gio from "gi://Gio";
+import GLib from "@girs/glib-2.0";
+import Gio from "@girs/gio-2.0";
 
 import { logErr } from "../utils/logging.js";
 

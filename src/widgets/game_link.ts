@@ -30,7 +30,7 @@ export const GameLink = GObject.registerClass(
     /**
      * Handles button press events
      */
-    vfunc_button_press_event(_event: any): boolean {
+    vfunc_button_press_event(_event: unknown): boolean {
       if (!this.visible || this.get_paint_opacity() === 0) {
         return Clutter.EVENT_PROPAGATE;
       }
@@ -40,7 +40,7 @@ export const GameLink = GObject.registerClass(
     /**
      * Handles button release events (opens the URL)
      */
-    vfunc_button_release_event(_event: any): boolean {
+    vfunc_button_release_event(_event: unknown): boolean {
       if (!this.visible || this.get_paint_opacity() === 0) {
         return Clutter.EVENT_PROPAGATE;
       }
@@ -58,14 +58,14 @@ export const GameLink = GObject.registerClass(
     /**
      * Handles mouse motion events (changes cursor)
      */
-    vfunc_motion_event(_event: any): boolean {
+    vfunc_motion_event(_event: unknown): boolean {
       if (!this.visible || this.get_paint_opacity() === 0) {
         return Clutter.EVENT_PROPAGATE;
       }
 
       if (!this._cursorChanged) {
         const cursor = this._getCursorType();
-        global.display.set_cursor((Meta.Cursor as any)[cursor]);
+        global.display.set_cursor((Meta.Cursor as unknown)[cursor]);
         this._cursorChanged = true;
       }
 
@@ -85,7 +85,7 @@ export const GameLink = GObject.registerClass(
     /**
      * Handles leave events (resets cursor)
      */
-    vfunc_leave_event(event: any): boolean {
+    vfunc_leave_event(event: unknown): boolean {
       if (!this.visible || this.get_paint_opacity() === 0) {
         return Clutter.EVENT_PROPAGATE;
       }
