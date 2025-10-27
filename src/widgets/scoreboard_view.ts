@@ -1,22 +1,67 @@
 import Clutter from "gi://Clutter";
 import St from "gi://St";
 import { GameLink } from "./game_link.js";
-import { getAccentColor } from '../utils/accent_color.js';
+import { getAccentColor } from "../utils/accent_color.js";
 import { logErr } from "../utils/logging.js";
 
 /**
- * ScoreboardView: Renders games and leagues into GNOME Shell menu layouts.
- * Only responsible for UI construction, not data fetching or transformation.
+ * Represents a team in a game
  */
-export function addGamesToGrid(grid, games, offset = 0, league = null, client = null) {
-  if (league !== null) {
+export interface Team {
+  id: string;
+  team: string;
+  teamAbbr: string;
+  score: string;
+  isWinner: boolean;
+  isLoser: boolean;
+}
+
+/**
+ * Represents a game event
+ */
+export interface Game {
+  home: Team;
+  away: Team;
+  meta: string;
+  timestamp?: number;
+  link: string | null;
+  live: boolean;
+  isComplete: boolean;
+}
+
+/**
+ * Client interface for fetching followed teams
+ */
+export interface GameClient {
+  getFollowedTeams(_league: string): string[];
+}
+
+/**
+ * Renders games and leagues into GNOME Shell menu layouts.
+ * Only responsible for UI construction, not data fetching or transformation.
+ * 
+ * @param grid - The St.Widget grid to attach game elements to
+ * @param games - Array of game objects to render
+ * @param offset - Starting row offset in the grid
+ * @param league - Optional league name to display as header
+ * @param client - Optional client for fetching followed teams
+ * @returns The next available row offset after adding all games
+ */
+export function addGamesToGrid(
+  grid: any,
+  games: Game[],
+  offset: number = 0,
+  _league: string | null = null,
+  client: GameClient | null = null
+): number {
+  if (_league !== null) {
     grid.insert_row(offset);
     grid.insert_column(offset);
     grid.insert_column(offset);
     grid.insert_column(offset);
 
     const leagueName = new St.Label({
-      text: league,
+      text: _league,
       y_expand: true,
       x_align: Clutter.ActorAlign.CENTER,
       y_align: Clutter.ActorAlign.CENTER,
@@ -27,10 +72,11 @@ export function addGamesToGrid(grid, games, offset = 0, league = null, client = 
   }
 
   const accentColor = getAccentColor();
-  let followedIds = [];
-  if (league && client && typeof client.getFollowedTeams === "function") {
+  let followedIds: string[] = [];
+  
+  if (_league && client && typeof client.getFollowedTeams === "function") {
     try {
-      followedIds = client.getFollowedTeams(league) || [];
+      followedIds = client.getFollowedTeams(_league) || [];
     } catch (e) {
       logErr(e, "Failed to fetch followed teams");
     }
@@ -74,7 +120,19 @@ export function addGamesToGrid(grid, games, offset = 0, league = null, client = 
   return offset + games.length * 3;
 }
 
-function createTeamLabel(teamName, isFollowed, accentColor) {
+/**
+ * Creates a styled label for a team name
+ * 
+ * @param teamName - The name of the team
+ * @param isFollowed - Whether this team is followed by the user
+ * @param accentColor - Optional accent color for followed teams
+ * @returns A configured St.Label for the team
+ */
+function createTeamLabel(
+  teamName: string,
+  isFollowed: boolean,
+  accentColor: string | null
+): any {
   const label = new St.Label({
     text: teamName,
     style_class: `team${isFollowed ? " team--followed" : ""}`,
@@ -93,7 +151,14 @@ function createTeamLabel(teamName, isFollowed, accentColor) {
   return label;
 }
 
-function createScoreLabel(score, isFollowed) {
+/**
+ * Creates a styled label for a team's score
+ * 
+ * @param score - The score to display
+ * @param isFollowed - Whether this team is followed by the user
+ * @returns A configured St.Label for the score
+ */
+function createScoreLabel(score: string, isFollowed: boolean): any {
   return new St.Label({
     text: score,
     style_class: `score${isFollowed ? " score--followed" : ""}`,
@@ -102,7 +167,13 @@ function createScoreLabel(score, isFollowed) {
   });
 }
 
-function createMetaLabel(meta) {
+/**
+ * Creates a label for game metadata (e.g., time, status)
+ * 
+ * @param meta - The metadata text to display
+ * @returns A configured St.Label for the metadata
+ */
+function createMetaLabel(meta: string): any {
   return new St.Label({
     text: meta,
     style_class: "meta",

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<interface>
+  <requires lib="gtk" version="4.0" />
+  <object class="AdwPreferencesPage" id="teams_page">
+    <property name="title" translatable="true">Configure Teams</property>
+    <property name="icon_name">starred-symbolic</property>
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title" translatable="true">Select Teams to Follow</property>
+        <property name="description" translatable="true">Click on a country to see its leagues, then select teams</property>
+        <child>
+          <object class="GtkSearchEntry" id="search_entry">
+            <property name="placeholder-text" translatable="true">Search countries or leagues...</property>
+            <property name="margin-bottom">12</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow" id="teams_scroll">
+            <property name="vexpand">true</property>
+            <property name="hscrollbar-policy">never</property>
+            <property name="min-content-height">400</property>
+            <child>
+              <object class="GtkBox" id="content_box">
+                <property name="orientation">vertical</property>
+                <property name="spacing">0</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

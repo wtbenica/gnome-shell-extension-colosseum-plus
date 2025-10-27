@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<schemalist>
+    <schema id="org.gnome.shell.extensions.colosseum" path="/org/gnome/shell/extensions/colosseum/">
+        <key name="update-frequency" type="i">
+            <default>5</default>
+            <summary>Live score update frequency</summary>
+        </key>
+        <key name="followed-only" type="b">
+            <default>false</default>
+            <summary>Display only followed teams</summary>
+        </key>
+        <key name="compact-mode" type="b">
+            <default>false</default>
+            <summary>Enable compact mode</summary>
+        </key>
+        <key name="show-next-games" type="b">
+            <default>false</default>
+            <summary>Show next/upcoming games for followed teams</summary>
+        </key>
+        <key name="position-in-topbar" type="i">
+            <default>1</default>
+            <summary
+            >Position of extension in Top Bar (0 for Left, 1 for Right)</summary>
+        </key>
+        <key name="bund-enabled" type="b">
+            <default>false</default>
+            <summary>Enable Bund scoreboard</summary>
+        </key>
+        <key name="bund2-enabled" type="b">
+            <default>false</default>
+            <summary>Enable Bund2 scoreboard</summary>
+        </key>
+        <key name="ucl-enabled" type="b">
+            <default>false</default>
+            <summary>Enable UCL scoreboard</summary>
+        </key>
+        <key name="elc-enabled" type="b">
+            <default>false</default>
+            <summary>Enable English League Championship scoreboard</summary>
+        </key>
+        <key name="epl-enabled" type="b">
+            <default>false</default>
+            <summary>Enable EPL scoreboard</summary>
+        </key>
+        <key name="isr-enabled" type="b">
+            <default>false</default>
+            <summary>Enable Israeli Premier League scoreboard</summary>
+        </key>
+        <key name="l1-enabled" type="b">
+            <default>false</default>
+            <summary>Enable English League One scoreboard</summary>
+        </key>
+        <key name="laliga-enabled" type="b">
+            <default>false</default>
+            <summary>Enable LaLiga scoreboard</summary>
+        </key>
+        <key name="laligamx-enabled" type="b">
+            <default>false</default>
+            <summary>Enable La Liga MX scoreboard</summary>
+        </key>
+        <key name="ligue1-enabled" type="b">
+            <default>false</default>
+            <summary>Enable Ligue 1 scoreboard</summary>
+        </key>
+        <key name="mls-enabled" type="b">
+            <default>false</default>
+            <summary>Enable MLS scoreboard</summary>
+        </key>
+        <key name="seriea-enabled" type="b">
+            <default>false</default>
+            <summary>Enable Serie A scoreboard</summary>
+        </key>
+        <key name="wnba-enabled" type="b">
+            <default>false</default>
+            <summary>Enable WNBA scoreboard</summary>
+        </key>
+        <key name="concacafgold-enabled" type="b">
+            <default>false</default>
+            <summary>Enable CONCACAF Gold Cup scoreboard</summary>
+        </key>
+        <key name="conmebol-enabled" type="b">
+            <default>false</default>
+            <summary>Enable Copa America scoreboard</summary>
+        </key>
+        <key name="facup-enabled" type="b">
+            <default>false</default>
+            <summary>Enable FA Cup scoreboard</summary>
+        </key>
+        <key name="fifawc-enabled" type="b">
+            <default>false</default>
+            <summary>Enable FIFA World Cup scoreboard</summary>
+        </key>
+        <key name="leagues-enabled" type="b">
+            <default>false</default>
+            <summary>Enable Leagues Cup scoreboard</summary>
+        </key>
+        <key name="uefaeuroconf-enabled" type="b">
+            <default>false</default>
+            <summary>Enable UEFA Europa Conference League scoreboard</summary>
+        </key>
+        <key name="uefaeuro-enabled" type="b">
+            <default>false</default>
+            <summary>Enable UEFA European Championship scoreboard</summary>
+        </key>
+        <key name="uefaeuropa-enabled" type="b">
+            <default>false</default>
+            <summary>Enable UEFA Europa League scoreboard</summary>
+        </key>
+        <key name="uefawomenchampions-enabled" type="b">
+            <default>false</default>
+            <summary>Enable UEFA Women's Champions League scoreboard</summary>
+        </key>
+        <key name="followed-teams" type="as">
+            <default>[]</default>
+            <summary>Array of followed team IDs</summary>
+        </key>
+    </schema>
+</schemalist>

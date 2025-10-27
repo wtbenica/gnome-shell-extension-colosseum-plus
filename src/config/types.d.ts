@@ -8,16 +8,24 @@ declare module "gi://St";
 declare module "gi://Soup";
 declare module "gi://Adw";
 declare module "gi://Gtk";
+declare module "gi://Meta";
 
 declare module "resource:///org/gnome/shell/ui/main.js";
 declare module "resource:///org/gnome/shell/ui/panelMenu.js";
 declare module "resource:///org/gnome/shell/ui/popupMenu.js";
 declare module "resource:///org/gnome/shell/ui/modalDialog.js";
 declare module "resource:///org/gnome/shell/ui/checkBox.js";
+declare module "resource:///org/gnome/shell/misc/config.js";
 declare module "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
 declare module "resource:///org/gnome/shell/extensions/extension.js";
 
 declare module 'example-module' {
   export const example: string;
+}
+
+// Environment variables interface
+export interface Env {
+  SPORT_RADAR_KEY?: string;
+  [key: string]: string | undefined;
 }

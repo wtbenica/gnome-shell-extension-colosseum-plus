@@ -6,6 +6,7 @@ import Gio from "gi://Gio";
 import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
 
 import { logErr } from "../utils/logging.js";
+import { DataLoader } from "../data/data_loader.js";
 
 export const TeamSelectorDialog = GObject.registerClass(
   class TeamSelectorDialog extends ModalDialog.ModalDialog {
@@ -57,7 +58,6 @@ export const TeamSelectorDialog = GObject.registerClass(
         this._contentBox.destroy_all_children();
 
         // Fetch competitions from Sportradar (filtered to 4 leagues)
-        const DataLoader = (await import('../data/data_loader.js')).default;
         const competitions = await DataLoader.fetchCompetitions();
 
         if (!competitions || competitions.length === 0) {

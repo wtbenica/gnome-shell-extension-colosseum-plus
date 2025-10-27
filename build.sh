@@ -51,9 +51,6 @@ if [[ ! -d "dist" ]]; then
   exit 1
 fi
 
-# Copy dist and other assets to working directory. Use -r with care if folders exist.
-echo "Copying files into temporary packaging directory..."
-cp -r dist/* "$WORK_DIR/" || true
 # Ensure UI assets and other runtime assets are included in dist so dist is self-contained
 if [[ -d src/ui ]]; then
   echo "Copying UI files into dist/..."
@@ -76,45 +73,39 @@ fi
 # Remove TypeScript-only artifacts (declarations/maps) from dist to keep it JS-only
 echo "Stripping TypeScript declaration files from dist/..."
 find dist -type f \( -name '*.d.ts' -o -name '*.d.ts.map' -o -name '*.d.ts.*' -o -name '*.d.ts.map.*' \) -delete || true
+# Exclude .ts files from dist
+find dist -type f -name '*.ts' -delete || true
+
+# Copy prepared dist contents into the temporary packaging directory
+echo "Copying files into temporary packaging directory..."
+cp -r dist/* "$WORK_DIR/" || true
+
+# Also include non-compiled assets (schemas, icon, ui) from src into the work dir
 if [[ -d src/schemas ]]; then
-  cp -r src/schemas "$WORK_DIR/"
+  cp -r src/schemas "$WORK_DIR/" || true
 fi
 if [[ -d src/icon ]]; then
-  cp -r src/icon "$WORK_DIR/"
+  cp -r src/icon "$WORK_DIR/" || true
 fi
 if [[ -d src/ui ]]; then
-  cp -r src/ui "$WORK_DIR/"
+  cp -r src/ui "$WORK_DIR/" || true
 fi
 if [[ -f src/stylesheet.css ]]; then
-  cp src/stylesheet.css "$WORK_DIR/"
+  cp src/stylesheet.css "$WORK_DIR/" || true
 fi
 if [[ -f src/metadata.json ]]; then
-  cp src/metadata.json "$WORK_DIR/"
+  cp src/metadata.json "$WORK_DIR/" || true
 fi
-
-# Copy main extension.js to project root for GNOME packaging if present in dist
-if [[ -f dist/extension.js ]]; then
-  cp dist/extension.js ./extension.js
-else
-  echo "Warning: dist/extension.js not found; GNOME expects extension.js at project root." >&2
-fi
-# Also copy stylesheet to project root for local development (so extension.js at repo root
-# can find stylesheet when running the extension from source). This mirrors the behavior
-# on the 'leagues' branch where stylesheet lived at the extension root.
-if [[ -f dist/stylesheet.css ]]; then
-  cp dist/stylesheet.css ./stylesheet.css
-fi
-
-pushd "$WORK_DIR" >/dev/null
 
 # Do NOT include compiled schema binaries in the zip
-if [[ -d "schemas" ]]; then
-  find schemas -name 'gschemas.compiled' -delete || true
+if [[ -d "$WORK_DIR/schemas" ]]; then
+  find "$WORK_DIR/schemas" -name 'gschemas.compiled' -delete || true
 fi
 
-# Create a single GNOME-friendly shell-extension zip
+# Create a single GNOME-friendly shell-extension zip from the work dir
 ZIP_NAME="${DIR}/colosseum@sereneblue.shell-extension.zip"
 echo "Creating zip: $ZIP_NAME"
+pushd "$WORK_DIR" >/dev/null
 zip -r -q "$ZIP_NAME" .
 popd >/dev/null
 

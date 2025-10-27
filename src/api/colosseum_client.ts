@@ -73,7 +73,7 @@ export default class ColosseumClient {
    * @returns Promise<Array<any>>
    */
   async getTeamSchedule(teamId: string | number): Promise<any[]> {
-    return await DataLoader.fetchCompetitorSchedules(teamId, 7);
+    return await DataLoader.fetchCompetitorSchedules(String(teamId), 7);
   }
 
   isFollowOnlyEnabled(): boolean {

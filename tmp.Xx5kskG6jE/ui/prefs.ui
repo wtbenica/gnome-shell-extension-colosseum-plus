@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<interface>
+  <requires lib="gtk" version="4.0" />
+  <object class="GtkAdjustment" id="updateFrequency">
+    <property name="lower">1</property>
+    <property name="upper">30</property>
+    <property name="value">5</property>
+    <property name="step_increment">1</property>
+  </object>
+  <object class="AdwPreferencesPage" id="preferences_page">
+    <property name="title" translatable="true">Preferences</property>
+    <property name="icon_name">applications-system-symbolic</property>
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title" translatable="true">Display Options</property>
+        <child>
+          <object class="AdwActionRow" id="prefs_label_followed_only">
+            <property name="title" translatable="true">Only show followed teams</property>
+            <property name="activatable-widget">prefs_followed_only</property>
+            <child type="suffix">
+              <object class="GtkSwitch" id="prefs_followed_only">
+                <property name="halign">3</property>
+                <property name="valign">3</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwActionRow" id="prefs_label_compact_mode">
+            <property name="title" translatable="true">Enable compact mode</property>
+            <property name="activatable-widget">prefs_compact_mode</property>
+            <child type="suffix">
+              <object class="GtkSwitch" id="prefs_compact_mode">
+                <property name="halign">3</property>
+                <property name="valign">3</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwActionRow" id="prefs_label_show_next_games">
+            <property name="title" translatable="true">Show next games</property>
+            <property name="activatable-widget">prefs_show_next_games</property>
+            <child type="suffix">
+              <object class="GtkSwitch" id="prefs_show_next_games">
+                <property name="halign">3</property>
+                <property name="valign">3</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwActionRow" id="prefs_label_position_topbar">
+            <property name="title" translatable="true">Position in Top Bar</property>
+            <child type="suffix">
+              <object class="GtkComboBoxText" id="prefs_position_topbar">
+                <items>
+                  <item id="0">Left</item>
+                  <item id="1">Right</item>
+                </items>
+                <property name="valign">center</property>
+                <property name="halign">end</property>
+                <property name="hexpand">true</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="AdwPreferencesGroup">
+        <child>
+          <object class="AdwActionRow" id="prefs_label_update">
+            <property name="title" translatable="true">Update Frequency (min)</property>
+            <child type="suffix">
+              <object class="GtkSpinButton" id="prefs_frequency">
+                <property name="text">0</property>
+                <property name="adjustment">updateFrequency</property>
+                <property name="climb_rate">1</property>
+                <property name="numeric">1</property>
+                <property name="wrap">1</property>
+                <property name="value">30</property>
+                <property name="valign">center</property>
+                <property name="halign">end</property>
+                <property name="hexpand">true</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

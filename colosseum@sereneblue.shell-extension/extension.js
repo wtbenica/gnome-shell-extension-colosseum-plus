@@ -1,8 +1,8 @@
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { getConstants } from "./config/const.js";
-import { Colosseum } from "./widgets/panel_menu.js";
-import DataLoader from "./data/data_loader.js";
+import { Colosseum } from "./widgets/panel_menu.ts";
+import DataLoader from "./data/data_loader.ts";
 import { logErr } from "./utils/logging.js";
 export default class ColosseumExtension extends Extension {
     async enable() {
