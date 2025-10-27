@@ -220,10 +220,7 @@ export function logFile(endpoint, params = {}) {
   try {
     const timestamp = new Date().toISOString();
     const logEntry = `${timestamp} - ${endpoint} - ${JSON.stringify(params)}\n`;
-    const dir = Gio.File.new_for_path(LOG_DIR);
-    if (!dir.query_exists(null)) {
-      dir.make_directory_with_parents(null);
-    }
+    GLib.mkdir_with_parents(LOG_DIR, 0o755);
     const apiLogFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, 'api_calls.log']));
     const [success, contents] = apiLogFile.load_contents(null);
     const existingContent = success ? new TextDecoder().decode(contents) : '';
@@ -259,10 +256,7 @@ export function logFile(endpoint, params = {}) {
 function logToFile(message, level) {
   // Always log to file in GJS
   try {
-    const dir = Gio.File.new_for_path(LOG_DIR);
-    if (!dir.query_exists(null)) {
-      dir.make_directory_with_parents(null);
-    }
+    GLib.mkdir_with_parents(LOG_DIR, 0o755);
     const logFileName = `${level}.log`;
     const levelLogFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, logFileName]));
     const [success, contents] = levelLogFile.load_contents(null);

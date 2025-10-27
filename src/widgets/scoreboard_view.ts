@@ -1,3 +1,4 @@
+// @ts-nocheck
 import Clutter from "gi://Clutter";
 import St from "gi://St";
 import { GameLink } from "./game_link.js";

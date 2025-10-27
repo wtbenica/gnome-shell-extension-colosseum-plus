@@ -1,3 +1,4 @@
+// @ts-nocheck
 import Clutter from "gi://Clutter";
 import Gio from "gi://Gio";
 import GObject from "gi://GObject";

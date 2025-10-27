@@ -6,7 +6,7 @@ import Gio from "gi://Gio";
 import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
 
 import { logErr } from "../utils/logging.js";
-import { DataLoader } from "../data/data_loader.js";
+import DataLoader from "../data/data_loader.js";
 
 export const TeamSelectorDialog = GObject.registerClass(
   class TeamSelectorDialog extends ModalDialog.ModalDialog {

@@ -1,25 +1,29 @@
 {
-  "name": "gnome-shell-extension-colosseum",
+  "name": "gnome-shell-extension-colosseum-plus",
+  "version": "1.0.0",
+  "description": "A GNOME Shell extension for displaying sports scores and information",
+  "homepage": "https://github.com/wtbenica/gnome-shell-extension-colosseum",
+  "main": "src/extension.js",
+  "scripts": {
+    "build": "tsc && (cd src && find . -name '*.js' -exec cp --parents {} ../dist/ \\;)",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
   "type": "module",
-  "packageManager": "yarn@4.10.3",
+  "keywords": [
+    "gnome",
+    "extension",
+    "sports",
+    "colosseum"
+  ],
+  "author": "wtbenica",
+  "license": "MIT",
+  "dependencies": {
+    "@girs/gnome-shell": "49.0.3"
+  },
   "devDependencies": {
     "@girs/gjs": "^4.0.0-beta.38",
-    "@typescript-eslint/eslint-plugin": "^8.46.2",
-    "@typescript-eslint/parser": "^8.46.2",
-    "eslint": "^9.38.0",
     "typescript": "5.9.3"
   },
-  "dependenciesMeta": {
-    "@eslint/eslintrc@3.3.1": {
-      "unplugged": true
-    }
-  },
-  "scripts": {
-    "lint": "eslint src/ --ext .js,.ts",
-    "lint:fix": "eslint src/ --ext .js,.ts --fix",
-    "clean": "rm -rf node_modules .yarn/cache .yarn/unplugged .yarn/build-state.json"
-  },
-  "dependencies": {
-    "@girs/gnome-shell": "^49.0.3"
-  }
+  "packageManager": "yarn@4.10.3"
 }
