@@ -1,10 +1,15 @@
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
+import GLib from 'gi://GLib';
 
 import { getConstants } from "./config/const.js";
 import { Colosseum } from "./widgets/panel_menu.js";
 import DataLoader from "./data/data_loader.js";
 import { logErr } from "./utils/logging.js";
+
+// Ensure log directory exists
+const LOG_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension', 'logs']);
+GLib.mkdir_with_parents(LOG_DIR, 0o755);
 
 export default class ColosseumExtension extends Extension {
   async enable() {

@@ -66,7 +66,7 @@ export const Colosseum = GObject.registerClass(
 
       this._icon = new St.Icon({
         gicon: Gio.icon_new_for_string(
-          EXT_PATH.replace("widgets/panel_menu.ts", "icon/colosseum-symbolic.svg")
+          EXT_PATH.replace("widgets/panel_menu.js", "icon/colosseum-symbolic.svg")
         ),
         icon_size: 24,
       });
