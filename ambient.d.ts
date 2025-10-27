@@ -3,47 +3,20 @@ import "@girs/gjs/dom";
 import "@girs/gnome-shell/ambient";
 import "@girs/gnome-shell/extensions/global";
 
-declare module "gi://Clutter" {
-  const Clutter: any;
-  export default Clutter;
+// Properly declare TextDecoder with its interface for GJS environments
+declare global {
+  const TextDecoder: {
+    new (label?: string, options?: TextDecoderOptions): TextDecoder;
+    prototype: TextDecoder;
+  };
+
+  interface TextDecoder {
+    readonly encoding: string;
+    readonly fatal: boolean;
+    readonly ignoreBOM: boolean;
+    decode(input?: BufferSource | ArrayBufferView, options?: TextDecodeOptions): string;
+  }
 }
 
-declare module "gi://Gio" {
-  const Gio: any;
-  export default Gio;
-}
+export {};
 
-declare module "gi://GLib" {
-  const GLib: any;
-  export default GLib;
-}
-
-declare module "gi://GObject" {
-  const GObject: any;
-  export default GObject;
-}
-
-declare module "gi://Meta" {
-  const Meta: any;
-  export default Meta;
-}
-
-declare module "gi://St" {
-  const St: any;
-  export default St;
-}
-
-declare module "resource:///org/gnome/shell/misc/config.js" {
-  const Config: any;
-  export default Config;
-}
-
-declare module "resource:///org/gnome/shell/ui/panelMenu.js" {
-  const PanelMenu: any;
-  export default PanelMenu;
-}
-
-declare module "resource:///org/gnome/shell/ui/popupMenu.js" {
-  const PopupMenu: any;
-  export default PopupMenu;
-}

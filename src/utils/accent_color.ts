@@ -3,7 +3,7 @@ import Gio from 'gi://Gio';
 import { logErr } from '../utils/logging.js';
 
 // GNOME accent color names mapped to hex values
-export const ACCENT_MAP_LIGHT = {
+export const ACCENT_MAP_LIGHT: Record<string, string> = {
   blue: "#81D0FF",
   teal: "#7bdff4",
   green: "#8de698",
@@ -15,7 +15,7 @@ export const ACCENT_MAP_LIGHT = {
   slate: "#bbd1e5",
 };
 
-export const ACCENT_MAP = {
+export const ACCENT_MAP: Record<string, string> = {
   blue: "#3584E4",
   teal: "#2190A4",
   green: "#3A944A",
@@ -27,7 +27,7 @@ export const ACCENT_MAP = {
   slate: "#6F8396",
 };
 
-export const ACCENT_MAP_DARK = {
+export const ACCENT_MAP_DARK: Record<string, string> = {
   blue: "#0461be",
   teal: "#007184",
   green: "#15772e",
@@ -43,7 +43,7 @@ export const ACCENT_MAP_DARK = {
  * Get the current GNOME accent color as a hex string.
  * Returns the accent color if set, otherwise falls back to blue.
  */
-export function getAccentColor() {
+export function getAccentColor(): string {
   try {
     const ifaceSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
     const accentName = ifaceSettings.get_string('accent-color');

@@ -6,10 +6,20 @@ import { logErr } from "../utils/logging.js";
 const CACHE_FILE = GLib.get_user_cache_dir() + '/colosseum-data.json';
 const CACHE_DURATION_DAYS = 30;
 
+interface CacheData {
+  lastUpdate: number;
+  leagues: any[];
+  teams: Record<string, any[]>;
+  rawCompetitions: any[];
+}
+
 /**
  * Manages local file cache for competitions and teams data
  */
 export class CacheManager {
+  private _decoder: TextDecoder;
+  data: CacheData;
+
   constructor() {
     this._decoder = new TextDecoder();
     this.data = this.load();
@@ -18,7 +28,7 @@ export class CacheManager {
   /**
    * Load cache from disk
    */
-  load() {
+  load(): CacheData {
 
     try {
       const cacheFile = Gio.File.new_for_path(CACHE_FILE);
@@ -29,10 +39,6 @@ export class CacheManager {
         if (success) {
           const text = this._decoder.decode(contents);
           const parsed = JSON.parse(text);
-
-          'leagues:', parsed.leagues?.length || 0,
-            'rawCompetitions:', parsed.rawCompetitions?.length || 0,
-            'teams:', Object.keys(parsed.teams || {}).length;
 
           // Handle legacy cache shape: some older saves stored competitions in `teams` by mistake.
           // If rawCompetitions is empty but teams is an array of competition-like objects,
@@ -67,7 +73,7 @@ export class CacheManager {
   /**
    * Save cache to disk
    */
-  save(leagues, teams, rawCompetitions) {
+  save(leagues: any[], teams: Record<string, any[]>, rawCompetitions: any[]): void {
     try {
       const cacheDir = Gio.File.new_for_path(GLib.get_user_cache_dir());
       if (!cacheDir.query_exists(null)) {
@@ -97,31 +103,31 @@ export class CacheManager {
   /**
    * Check if cache needs updating
    */
-  shouldUpdate() {
+  shouldUpdate(): boolean {
     const now = new Date();
     const lastUpdate = new Date(this.data.lastUpdate);
-    const daysSinceUpdate = (now - lastUpdate) / (1000 * 60 * 60 * 24);
+    const daysSinceUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
     return daysSinceUpdate >= CACHE_DURATION_DAYS;
   }
 
   /**
    * Get cached competitions
    */
-  getRawCompetitions() {
+  getRawCompetitions(): any[] {
     return this.data.rawCompetitions || [];
   }
 
   /**
    * Get cached leagues
    */
-  getLeagues() {
+  getLeagues(): any[] {
     return this.data.leagues || [];
   }
 
   /**
    * Get cached teams for a league
    */
-  getTeams(leagueId) {
+  getTeams(leagueId: string): any[] {
     return this.data.teams?.[leagueId] || [];
   }
 }

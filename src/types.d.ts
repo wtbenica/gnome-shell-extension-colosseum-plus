@@ -42,3 +42,8 @@ declare module "resource:///org/gnome/shell/ui/popupMenu.js" {
   const PopupMenu: any;
   export default PopupMenu;
 }
+
+declare module "gi://Soup" {
+  const Soup: any;
+  export default Soup;
+}

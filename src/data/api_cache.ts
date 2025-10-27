@@ -15,7 +15,7 @@ export class ApiCache {
         this._ensureCacheDir();
     }
 
-    _ensureCacheDir() {
+    _ensureCacheDir(): void {
         const dir = Gio.File.new_for_path(CACHE_DIR);
         if (!dir.query_exists(null)) {
             try {
@@ -27,12 +27,12 @@ export class ApiCache {
         }
     }
 
-    _getCacheKey(endpoint, params) {
+    _getCacheKey(endpoint: string, params: any): string {
         const paramStr = JSON.stringify(params || {});
         return `${endpoint}_${GLib.compute_checksum_for_string(GLib.ChecksumType.MD5, paramStr, -1)}`;
     }
 
-    _getCacheFile(key) {
+    _getCacheFile(key: string): any {
         return Gio.File.new_for_path(GLib.build_filenamev([CACHE_DIR, `${key}.json`]));
     }
 
@@ -43,7 +43,7 @@ export class ApiCache {
      * @param {number} maxAgeDays - Maximum age in days before cache expires
      * @returns {Promise<any|null>} Cached data or null if not found/expired
      */
-    async get(endpoint, params = null, maxAgeDays = MAX_CACHE_AGE_DAYS) {
+    async get(endpoint: string, params: any = null, maxAgeDays: number = MAX_CACHE_AGE_DAYS): Promise<any | null> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
 
@@ -87,7 +87,7 @@ export class ApiCache {
      * @param {any} payload - Data to cache
      * @param {object} params - Parameters used in the API call, if any
      */
-    async set(endpoint, payload, params = null) {
+    async set(endpoint: string, payload: any, params: any = null): Promise<void> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
 
@@ -116,7 +116,7 @@ export class ApiCache {
     /**
      * Invalidate a specific cache entry
      */
-    async invalidate(endpoint, params = null) {
+    async invalidate(endpoint: string, params: any = null): Promise<void> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
         
@@ -133,7 +133,7 @@ export class ApiCache {
     /**
      * Clear all cached data
      */
-    async invalidateAll() {
+    async invalidateAll(): Promise<void> {
         const dir = Gio.File.new_for_path(CACHE_DIR);
         if (!dir.query_exists(null)) return;
 

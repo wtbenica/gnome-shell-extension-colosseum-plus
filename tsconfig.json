@@ -17,7 +17,11 @@
     "checkJs": false,
     "resolveJsonModule": true,
     "declaration": false,
-    "noEmitOnError": false
+    "noEmitOnError": false,
+    "types": [
+      "@girs/gjs",
+      "@girs/gnome-shell"
+    ]
   },
   "include": [
     "src/**/*",

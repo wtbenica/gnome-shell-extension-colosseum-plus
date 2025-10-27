@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc && (cd src && find . -name '*.js' -exec cp --parents {} ../dist/ \\;)",
     "watch": "tsc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "lint": "eslint src/**/*.ts src/**/*.js"
   },
   "type": "module",
   "keywords": [
@@ -19,10 +20,14 @@
   "author": "wtbenica",
   "license": "MIT",
   "dependencies": {
-    "@girs/gnome-shell": "49.0.3"
+    "@girs/gjs": "^4.0.0-beta.38",
+    "@girs/gnome-shell": "^49.0.3"
   },
   "devDependencies": {
-    "@girs/gjs": "^4.0.0-beta.38",
+    "@eslint/js": "^9.38.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0",
     "typescript": "5.9.3"
   },
   "packageManager": "yarn@4.10.3"

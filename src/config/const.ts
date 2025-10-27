@@ -1,10 +1,16 @@
 import DataLoader from "../data/data_loader.js";
 import { logErr } from "../utils/logging.js";
 
-let constantsPromise = null;
-let loadedConstants = null;
+interface DynamicConstants {
+  PREF_LEAGUES?: Record<string, string>;
+  DISPLAY_NAME?: Record<string, string>;
+  SPORTS?: Record<string, any>;
+}
 
-export async function getConstants() {
+let constantsPromise: Promise<DynamicConstants> | null = null;
+let loadedConstants: DynamicConstants | null = null;
+
+export async function getConstants(): Promise<DynamicConstants> {
   if (!constantsPromise) {
     constantsPromise = DataLoader.getDynamicConstants();
   }
@@ -13,14 +19,14 @@ export async function getConstants() {
 }
 
 // Export static versions for synchronous access
-export const PREF_UPDATE_FREQ = "update-frequency";
-export const PREF_FOLLOWED_ONLY = "followed-only";
-export const PREF_COMPACT_MODE = "compact-mode";
-export const PREF_POSITION_TOPBAR = "position-in-topbar";
-export const PREF_SHOW_NEXT_GAMES = "show-next-games";
+export const PREF_UPDATE_FREQ: string = "update-frequency";
+export const PREF_FOLLOWED_ONLY: string = "followed-only";
+export const PREF_COMPACT_MODE: string = "compact-mode";
+export const PREF_POSITION_TOPBAR: string = "position-in-topbar";
+export const PREF_SHOW_NEXT_GAMES: string = "show-next-games";
 
 // Dynamic constants - will be populated after getConstants() is called
-export let PREF_LEAGUES = {
+export let PREF_LEAGUES: Record<string, string> = {
   "Bund": "bund-enabled",
   "Bund2": "bund2-enabled",
   "UCL": "ucl-enabled",
@@ -35,7 +41,7 @@ export let PREF_LEAGUES = {
   "Serie A": "seriea-enabled",
   "WNBA": "wnba-enabled",
 };
-export let DISPLAY_NAME = {
+export let DISPLAY_NAME: Record<string, string> = {
   "Bund": "Bundesliga",
   "Bund2": "2. Bundesliga",
   "UCL": "UEFA Champions League",
@@ -50,7 +56,7 @@ export let DISPLAY_NAME = {
   "Serie A": "Serie A",
   "WNBA": "WNBA",
 };
-export let PREF_TOURNAMENTS = {
+export let PREF_TOURNAMENTS: Record<string, string> = {
   "CONCACAF Gold Cup": "concacafgold-enabled",
   "Copa America": "conmebol-enabled",
   "FA Cup": "facup-enabled",
@@ -61,7 +67,7 @@ export let PREF_TOURNAMENTS = {
   "UEFA Europa League": "uefaeuropa-enabled",
   "UEFA Women's Champions League": "uefawomenchampions-enabled",
 };
-export let SPORTS = {};
+export let SPORTS: Record<string, any> = {};
 
 // Initialize the dynamic constants
 getConstants().then(constants => {

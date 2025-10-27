@@ -37,23 +37,31 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 /**
+ * Logger interface for consistent logging implementations.
+ */
+interface Logger {
+  log(...args: any[]): void;
+  logError(error: Error, message: string): void;
+}
+
+/**
  * Logger implementation for GJS/GNOME Shell environment.
  */
-const gjsLogger = {
-  log(...args) {
-    if (typeof (globalThis).log === "function") {
-      (globalThis).log(...args);
+const gjsLogger: Logger = {
+  log(...args: unknown[]): void {
+    if (typeof (globalThis as any).log === "function") {
+      (globalThis as any).log(...args);
     }
   },
-  logError(error, message) {
-    if (typeof (globalThis).logError === "function") {
-      (globalThis).logError(error, message);
+  logError(error: Error, message?: string): void {
+    if (typeof (globalThis as any).logError === "function") {
+      (globalThis as any).logError(error, message);
     }
   },
 };
 
 // Current logger instance (can be overridden for tests)
-let currentLogger = gjsLogger;
+let currentLogger: Logger = gjsLogger;
 
 // Log file directory
 const LOG_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension', 'logs']);
@@ -77,7 +85,7 @@ const LOG_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-exte
  * expect(mockLogger.logError).toHaveBeenCalled();
  * ```
  */
-export function setLogger(logger) {
+export function setLogger(logger: Logger) {
   currentLogger = logger;
 }
 
@@ -95,9 +103,9 @@ export function setLogger(logger) {
  * @internal This function is used internally by the public logging functions
  */
 function logMessage(
-  message,
-  context,
-  level = "error",
+  message: any,
+  context?: string,
+  level: string = "error",
 ) {
   const prefix = '[Colosseum]';
   let formattedMessage;
@@ -142,7 +150,7 @@ function logMessage(
  * // Output: [Colosseum] Color parsing: Invalid color format '#gggggg'
  * ```
  */
-export function logErr(error, context) {
+export function logErr(error: any, context?: string) {
   logMessage(error, context, 'error');
 }
 
@@ -161,7 +169,7 @@ export function logErr(error, context) {
  * logWarn('Settings file not found, using defaults', 'Settings');
  * ```
  */
-export function logWarn(message, context) {
+export function logWarn(message: any, context?: string) {
   logMessage(message, context, 'warn');
 }
 
@@ -178,7 +186,7 @@ export function logWarn(message, context) {
  * logInfo('Extension initialized successfully');
  * ```
  */
-export function logInfo(message, context) {
+export function logInfo(message: any, context?: string) {
   logMessage(message, context, 'info');
 }
 
@@ -196,7 +204,7 @@ export function logInfo(message, context) {
  * logDebug('Processing team data', 'DataLoader');
  * ```
  */
-export function logDebug(message, context) {
+export function logDebug(message: any, context?: string) {
   // Always log debug in GJS
   logMessage(message, context, 'debug');
 }
@@ -207,21 +215,21 @@ export function logDebug(message, context) {
  * Writes API call details to a log file for monitoring usage and debugging.
  * Only logs in development or when API logging is enabled.
  *
- * @param endpoint - API endpoint that was called
- * @param params - Parameters sent with the API call
+ * @param message - Message to log
+ * @param filename - Log filename, defaults to 'api_calls.log'
  *
  * @example
  * ```typescript
  * logFile('/competitions.json', { locale: 'en' });
  * ```
  */
-export function logFile(endpoint, params = {}) {
+export function logFile(message: string, filename: string = 'api_calls.log') {
   // Always log API calls in GJS
   try {
     const timestamp = new Date().toISOString();
-    const logEntry = `${timestamp} - ${endpoint} - ${JSON.stringify(params)}\n`;
+    const logEntry = `${timestamp} - ${message}\n`;
     GLib.mkdir_with_parents(LOG_DIR, 0o755);
-    const apiLogFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, 'api_calls.log']));
+    const apiLogFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, filename]));
     const [success, contents] = apiLogFile.load_contents(null);
     const existingContent = success ? new TextDecoder().decode(contents) : '';
     const newContent = existingContent + logEntry;
@@ -235,7 +243,7 @@ export function logFile(endpoint, params = {}) {
   } catch (e) {
     // Avoid calling logInfo here to prevent recursion (logInfo -> logToFile -> error)
     try {
-      currentLogger.log(`[Colosseum] logFile: Failed to log API call ${endpoint} ${JSON.stringify(params)} - ${e}`);
+      currentLogger.log(`[Colosseum] logFile: Failed to log message ${message} - ${e}`);
     } catch {
       // Swallow to avoid recursive logging
     }
@@ -253,7 +261,7 @@ export function logFile(endpoint, params = {}) {
  *
  * @internal
  */
-function logToFile(message, level) {
+function logToFile(message: string, level: string) {
   // Always log to file in GJS
   try {
     GLib.mkdir_with_parents(LOG_DIR, 0o755);
@@ -313,7 +321,7 @@ function logToFile(message, level) {
  * // Throws: Invalid date provided for API request
  * ```
  */
-export function validateDate(date, context = 'Date validation') {
+export function validateDate(date: Date, context: string = 'Date validation') {
   if (!(date instanceof Date) || isNaN(date.getTime())) {
     throw new Error(`Invalid date provided for ${context}`);
   }
@@ -335,7 +343,7 @@ export function validateDate(date, context = 'Date validation') {
  * // Throws: Empty or invalid string provided for Team name
  * ```
  */
-export function validateString(str, context = 'String validation') {
+export function validateString(str: string, context: string = 'String validation') {
   if (typeof str !== 'string' || str.trim().length === 0) {
     throw new Error(`Empty or invalid string provided for ${context}`);
   }
@@ -357,7 +365,7 @@ export function validateString(str, context = 'String validation') {
  * // Throws: Empty or invalid array provided for Teams list
  * ```
  */
-export function validateArray(arr, context = 'Array validation') {
+export function validateArray(arr: any[], context: string = 'Array validation') {
   if (!Array.isArray(arr) || arr.length === 0) {
     throw new Error(`Empty or invalid array provided for ${context}`);
   }

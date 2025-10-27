@@ -6,7 +6,7 @@ import { logErr } from "../utils/logging.js";
 /**
  * Load environment variables from .env file
  */
-export function loadEnv() {
+export function loadEnv(): Record<string, string> {
   // Try to load from extension directory first
   const extensionPath = GLib.get_home_dir() + '/.local/share/gnome-shell/extensions/colosseum@sereneblue';
   let envFile = Gio.File.new_for_path(extensionPath + '/.env');
@@ -27,9 +27,9 @@ export function loadEnv() {
     }
     
     const text = new TextDecoder().decode(contents);
-    const env = {};
-    
-    text.split('\n').forEach(line => {
+    const env: Record<string, string> = {};
+
+    text.split('\n').forEach((line: string) => {
       const [key, ...valueParts] = line.split('=');
       if (key && valueParts.length) {
         let value = valueParts.join('=').trim();

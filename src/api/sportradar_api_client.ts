@@ -8,7 +8,13 @@ import { ApiCache } from "../data/api_cache.js";
  * Sportradar API client for soccer data
  */
 export class SportradarClient {
-  constructor(apiKey) {
+  apiKey: string;
+  session: any;
+  _decoder: TextDecoder;
+  _cache: ApiCache;
+  _pendingRequests: Map<string, Promise<any>>;
+
+  constructor(apiKey: string) {
     this.apiKey = apiKey;
     this.session = new Soup.Session();
     this._decoder = new TextDecoder();
@@ -19,7 +25,7 @@ export class SportradarClient {
   /**
    * Make a GET request to Sportradar API
    */
-  async request(endpoint) {
+  async request(endpoint: string): Promise<any> {
     if (!this.apiKey) {
       logFile(`SKIPPED: ${endpoint} - No API key configured`, 'sportradar-api-calls.log');
       logInfo(`SportradarClient: no API key provided, skipping request to ${endpoint}`, 'SportradarClient');
@@ -40,7 +46,7 @@ export class SportradarClient {
         message,
         GLib.PRIORITY_DEFAULT,
         null,
-        (session, res) => {
+        (session: any, res: any) => {
           try {
             const data = session.send_and_read_finish(res);
             if (data) {
@@ -74,7 +80,7 @@ export class SportradarClient {
   /**
    * Fetch all competitions
    */
-  async getCompetitions(locale = "en") {
+  async getCompetitions(locale: string = "en"): Promise<any[]> {
     const cacheKey = `competitions_${locale}`;
 
     // Try cache first (7 day TTL for competition metadata)
@@ -100,7 +106,7 @@ export class SportradarClient {
   /**
    * Fetch seasons for a competition
    */
-  async getSeasonsForCompetition(competitionId, locale = "en") {
+  async getSeasonsForCompetition(competitionId: string, locale: string = "en"): Promise<any[]> {
     const cacheKey = `seasons_${competitionId}_${locale}`;
 
     // Try cache first (7 day TTL for season metadata)
@@ -126,7 +132,7 @@ export class SportradarClient {
   /**
    * Fetch competitors (teams) for a season
    */
-  async getCompetitorsForSeason(seasonId, locale = "en") {
+  async getCompetitorsForSeason(seasonId: string, locale: string = "en"): Promise<any[]> {
     const cacheKey = `competitors_${seasonId}_${locale}`;
 
     // Try cache first (7 day TTL for competitor metadata)
@@ -152,7 +158,7 @@ export class SportradarClient {
   /**
    * Fetch competition info including teams
    */
-  async getCompetitionInfo(competitionId, locale = "en") {
+  async getCompetitionInfo(competitionId: string, locale: string = "en"): Promise<any> {
 
     // Get seasons for this competition
     const seasons = await this.getSeasonsForCompetition(competitionId, locale);
@@ -161,7 +167,7 @@ export class SportradarClient {
     }
 
     // Find the current season (latest by start_date)
-    const currentSeason = seasons.sort((a, b) => new Date(b.start_date) - new Date(a.start_date))[0];
+    const currentSeason = seasons.sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())[0];
 
     // Get competitors for the current season
     const competitors = await this.getCompetitorsForSeason(currentSeason.id, locale);
@@ -175,7 +181,7 @@ export class SportradarClient {
   /**
    * Fetch schedules (previous and upcoming) for a competitor
    */
-  async getCompetitorSchedules(competitorId, locale = "en") {
+  async getCompetitorSchedules(competitorId: string, locale: string = "en"): Promise<any> {
     const cacheKey = `competitor_schedules_${competitorId}_${locale}`;
 
     // Try cache first (1 day TTL for schedules - they change daily)
@@ -223,7 +229,7 @@ export class SportradarClient {
   /**
    * Close the session
    */
-  destroy() {
+  destroy(): void {
     if (this.session) {
       this.session.abort();
     }
