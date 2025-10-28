@@ -3,7 +3,7 @@ import Gio from 'gi://Gio';
 
 import { logErr, logWarn } from "../utils/logging.js";
 import type { CacheData, Competitor } from "../api/types.js";
-import { isCacheData } from "../api/typeguards.js";
+import { isCacheData, isCompetitionArray } from "../api/typeguards.js";
 
 const CACHE_FILE = GLib.get_user_cache_dir() + '/colosseum-data.json';
 const CACHE_DURATION_DAYS = 30;
@@ -130,13 +130,17 @@ export class CacheManager {
       // Example migration: if `teams` was stored as array of competitions
       const teams = obj.teams;
       const rawCompetitions = obj.rawCompetitions || [];
-      if (Array.isArray(teams) && (teams as unknown[]).length > 0) {
+      if (Array.isArray(teams) && teams.length > 0) {
+        // Validate that rawCompetitions is actually an array of competitions
+        const validatedCompetitions = Array.isArray(rawCompetitions) && isCompetitionArray(rawCompetitions) 
+          ? rawCompetitions 
+          : [];
         // Convert to empty teams map and preserve rawCompetitions
         return {
           lastUpdate: typeof obj.lastUpdate === 'number' ? obj.lastUpdate : 0,
-          leagues: Array.isArray(rawCompetitions) ? (rawCompetitions as any) : [],
+          leagues: validatedCompetitions,
           teams: {},
-          rawCompetitions: Array.isArray(rawCompetitions) ? (rawCompetitions as any) : [],
+          rawCompetitions: validatedCompetitions,
         };
       }
     } catch (e) {

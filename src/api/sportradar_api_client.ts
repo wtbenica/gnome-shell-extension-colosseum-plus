@@ -4,7 +4,14 @@ import Soup from 'gi://Soup?version=3.0';
 
 import { logErr, logWarn, logFile } from "../utils/logging.js";
 import { ApiCache } from "../data/api_cache.js";
-import type { Competition, Competitor } from "../api/types.js";
+import type { 
+  Competition, 
+  Competitor,
+  CompetitionsApiResponse,
+  SeasonsApiResponse,
+  CompetitorsApiResponse,
+  SchedulesApiResponse
+} from "../api/types.js";
 import type { SportEventBasic } from "../api/types.js";
 import { isCompetitionArray, isCompetitorArray, isSportEventBasicArray } from "../api/typeguards.js";
 
@@ -138,11 +145,11 @@ export class SportradarClient {
 
     logFile(`CACHE MISS: competitions (${locale}) - fetching from API`, 'sportradar-api-calls.log');
 
-    const response = await this.request(`${locale}/competitions.json`);
+    const response = await this.request<CompetitionsApiResponse>(`${locale}/competitions.json`);
 
-    if (response && Array.isArray((response as any).competitions) && isCompetitionArray((response as any).competitions)) {
-      await this._cache.set<Competition[]>(cacheKey, (response as any).competitions, null, isCompetitionArray);
-      return (response as any).competitions;
+    if (response && Array.isArray(response.competitions) && isCompetitionArray(response.competitions)) {
+      await this._cache.set<Competition[]>(cacheKey, response.competitions, null, isCompetitionArray);
+      return response.competitions;
     }
 
     return [];
@@ -163,10 +170,10 @@ export class SportradarClient {
 
     logFile(`CACHE MISS: seasons for competition ${competitionId} - fetching from API`, 'sportradar-api-calls.log');
 
-    const response = await this.request(`${locale}/competitions/${competitionId}/seasons.json`);
-    if (response && Array.isArray((response as any).seasons)) {
-      await this._cache.set<Array<{ id: string; start_date?: string }>>(cacheKey, (response as any).seasons, null);
-      return (response as any).seasons;
+    const response = await this.request<SeasonsApiResponse>(`${locale}/competitions/${competitionId}/seasons.json`);
+    if (response && Array.isArray(response.seasons)) {
+      await this._cache.set<Array<{ id: string; start_date?: string }>>(cacheKey, response.seasons, null);
+      return response.seasons;
     }
 
     return [];
@@ -187,10 +194,10 @@ export class SportradarClient {
 
     logFile(`CACHE MISS: competitors for season ${seasonId} - fetching from API`, 'sportradar-api-calls.log');
 
-    const response = await this.request(`${locale}/seasons/${seasonId}/competitors.json`);
-    if (response && Array.isArray((response as any).season_competitors) && isCompetitorArray((response as any).season_competitors)) {
-      await this._cache.set<Competitor[]>(cacheKey, (response as any).season_competitors, null, isCompetitorArray);
-      return (response as any).season_competitors;
+    const response = await this.request<CompetitorsApiResponse>(`${locale}/seasons/${seasonId}/competitors.json`);
+    if (response && Array.isArray(response.season_competitors) && isCompetitorArray(response.season_competitors)) {
+      await this._cache.set<Competitor[]>(cacheKey, response.season_competitors, null, isCompetitorArray);
+      return response.season_competitors;
     }
 
     return [];
@@ -208,10 +215,14 @@ export class SportradarClient {
     }
 
     // Find the current season (latest by start_date)
-    const currentSeason = seasons.sort((a, b) => new Date((b as { start_date: string }).start_date).getTime() - new Date((a as { start_date: string }).start_date).getTime())[0];
+    const currentSeason = seasons.sort((a, b) => {
+      const dateA = a.start_date ? new Date(a.start_date).getTime() : 0;
+      const dateB = b.start_date ? new Date(b.start_date).getTime() : 0;
+      return dateB - dateA;
+    })[0];
 
     // Get competitors for the current season
-    const competitors = await this.getCompetitorsForSeason((currentSeason as { id: string }).id, locale);
+    const competitors = await this.getCompetitorsForSeason(currentSeason.id, locale);
     if (competitors.length === 0) {
       return null;
     }
@@ -243,9 +254,9 @@ export class SportradarClient {
     // Create the request promise and store it
     const requestPromise = (async () => {
       try {
-        const response = await this.request(`${locale}/competitors/${competitorId}/schedules.json`);
+        const response = await this.request<SchedulesApiResponse>(`${locale}/competitors/${competitorId}/schedules.json`);
         if (!response) return null;
-        const schedules = (response as any).schedules || [];
+        const schedules = response.schedules || [];
         if (!Array.isArray(schedules) || !isSportEventBasicArray(schedules)) return null;
         // Cache the result (1 day TTL)
         await this._cache.set<SportEventBasic[]>(cacheKey, schedules, null, isSportEventBasicArray);

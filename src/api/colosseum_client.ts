@@ -1,19 +1,8 @@
 import DataLoader from "../data/data_loader.js";
 import { Game } from "../widgets/scoreboard_view.js";
+import type { ColosseumConstants, Settings } from "../config/types.js";
 
-export interface ColosseumConstants {
-  PREF_LEAGUES: Record<string, string>;
-  PREF_TOURNAMENTS: Record<string, string>;
-  SPORTS: Record<string, Array<{ id: number; name: string; league?: string }>>;
-  PREF_FOLLOWED_ONLY: string;
-  PREF_SHOW_NEXT_GAMES: string;
-}
-
-export interface Settings {
-  get_boolean(_key: string): boolean;
-  get_strv(_key: string): string[];
-  get_int?(_key: string): number;
-}
+export type { ColosseumConstants, Settings } from "../config/types.js";
 
 export interface ExampleInterface {
   property: string;
@@ -87,9 +76,9 @@ export default class ColosseumClient {
     return this._settings.get_boolean(this._CONSTANTS.PREF_SHOW_NEXT_GAMES);
   }
 
-  async getAvailableTeams(): Promise<Array<{ id: number; name: string; league: string }>> {
+  async getAvailableTeams(): Promise<Array<{ id: string; name: string; league: string }>> {
     const enabledLeagues = this.getEnabledLeagues();
-    const teams: Array<{ id: number; name: string; league: string }> = [];
+    const teams: Array<{ id: string; name: string; league: string }> = [];
 
     for (const league of enabledLeagues) {
       const leagueTeams = this._CONSTANTS.SPORTS[league] || [];

@@ -7,17 +7,17 @@ import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
 
 import { logErr } from "../utils/logging.js";
 import DataLoader from "../data/data_loader.js";
-import type { Competition as ApiCompetition, Competitor as ApiCompetitor } from "../data/data_loader.js";
+import type { Competition, Competitor } from "../api/types.js";
 
-type Competition = ApiCompetition & { _placeholder?: boolean };
-type Competitor = ApiCompetitor & { leagueName?: string };
+type CompetitionWithPlaceholder = Competition & { _placeholder?: boolean };
+type CompetitorWithLeague = Competitor & { leagueName?: string };
 
 export const TeamSelectorDialog = GObject.registerClass(
   class TeamSelectorDialog extends ModalDialog.ModalDialog {
     private _settings: Gio.Settings;
     private _contentBox: St.BoxLayout;
   private _batchIndex!: number;
-  private _allTeams!: Competitor[];
+  private _allTeams!: CompetitorWithLeague[];
   private _followedCache!: Set<string>;
   private _currentLeague!: string | null;
 
@@ -93,7 +93,12 @@ export const TeamSelectorDialog = GObject.registerClass(
         }
 
         // Start all competition fetches concurrently while showing headers immediately.
-  const fetchPromises: Array<{ comp: Competition; leagueContainer: St.BoxLayout; statusLabel: St.Label; promise: Promise<Competitor[]> }> = [];
+        const fetchPromises: Array<{ 
+          comp: CompetitionWithPlaceholder; 
+          leagueContainer: St.BoxLayout; 
+          statusLabel: St.Label; 
+          promise: Promise<Competitor[]> 
+        }> = [];
 
         for (const comp of competitions) {
           // Create a per-league container so we can display the header immediately
@@ -127,14 +132,14 @@ export const TeamSelectorDialog = GObject.registerClass(
           if (result.status === 'fulfilled') {
             const teams = result.value;
             if (teams && teams.length > 0) {
-              teams.forEach((team: Competitor) => (team.leagueName = comp.name));
+              teams.forEach((team: Competitor) => (team as CompetitorWithLeague).leagueName = comp.name);
 
               // Sort this competition's teams by name for stable order
               teams.sort((a: Competitor, b: Competitor) => (a.name || '').localeCompare(b.name || ''));
 
               // Remove the status label and render this competition's teams into the league container
               leagueContainer.remove_child(statusLabel);
-              this._renderTeamsBatchedForLeague(teams, comp.name, followed, leagueContainer, accentColor);
+              this._renderTeamsBatchedForLeague(teams as CompetitorWithLeague[], comp.name, followed, leagueContainer, accentColor);
             } else {
               // Update the status label to indicate no teams are available
               statusLabel.set_text(comp._placeholder ? 'Not cached' : 'No teams available');
@@ -157,7 +162,7 @@ export const TeamSelectorDialog = GObject.registerClass(
       }
     }
 
-    _renderTeamsBatched(allTeams: Competitor[], followedTeams: string[] | undefined, accentColor: string) {
+    _renderTeamsBatched(allTeams: CompetitorWithLeague[], followedTeams: string[] | undefined, accentColor: string) {
       this._batchIndex = 0;
       this._allTeams = allTeams;
       this._followedCache = new Set(followedTeams || []);
@@ -254,7 +259,7 @@ export const TeamSelectorDialog = GObject.registerClass(
       });
     }
 
-    _renderTeamsBatchedForLeague(teams: Competitor[], leagueName: string, followedTeams: string[] | undefined, container: St.BoxLayout | null, accentColor: string) {
+    _renderTeamsBatchedForLeague(teams: CompetitorWithLeague[], leagueName: string, followedTeams: string[] | undefined, container: St.BoxLayout | null, accentColor: string) {
       let batchIndex = 0;
       const batchSize = 12; // per-league batch size
       const followedCache = new Set(followedTeams || []);

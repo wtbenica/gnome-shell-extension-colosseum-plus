@@ -3,8 +3,8 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import GLib from 'gi://GLib';
 
 import { getConstants } from "./config/const.js";
-import type { ColosseumConstants } from "./api/colosseum_client.js";
-import { Colosseum } from "./widgets/panel_menu.js";
+import type { ColosseumConstants } from "./config/types.js";
+import { ColosseumPanelMenu } from "./widgets/panel_menu.js";
 import DataLoader from "./data/data_loader.js";
 import { logErr } from "./utils/logging.js";
 
@@ -13,7 +13,7 @@ const LOG_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-exte
 GLib.mkdir_with_parents(LOG_DIR, 0o755);
 
 export default class ColosseumExtension extends Extension {
-  scores: InstanceType<typeof Colosseum> | null = null;
+  panelMenu: InstanceType<typeof ColosseumPanelMenu> | null = null;
 
   async enable(): Promise<void> {
     // Check if we should update data (only on Mondays if cache is stale)
@@ -24,28 +24,39 @@ export default class ColosseumExtension extends Extension {
     }
 
     // Load dynamic constants first
-    let constants: Record<string, unknown> | {};
+    let constants: ColosseumConstants;
     try {
       constants = await getConstants();
     } catch (error) {
       logErr(error, 'Colosseum extension: Failed to load dynamic constants');
-      constants = {}; // fallback
+      // Create fallback with minimal required fields
+      constants = {
+        PREF_UPDATE_FREQ: "update-frequency",
+        PREF_FOLLOWED_ONLY: "followed-only",
+        PREF_COMPACT_MODE: "compact-mode",
+        PREF_POSITION_TOPBAR: "position-in-topbar",
+        PREF_SHOW_NEXT_GAMES: "show-next-games",
+        PREF_LEAGUES: {},
+        PREF_TOURNAMENTS: {},
+        DISPLAY_NAME: {},
+        SPORTS: {}
+      };
     }
 
-  // PanelMenu.Button-derived class expects constructor args for alignment and label
-  this.scores = new Colosseum(0.0, "colosseum", false);
-    this.scores.setSettings(
+    // PanelMenu.Button-derived class expects constructor args for alignment and label
+    this.panelMenu = new ColosseumPanelMenu(0.0, "colosseum", false);
+    this.panelMenu.setSettings(
       this.getSettings("org.gnome.shell.extensions.colosseum"),
-      constants as unknown as ColosseumConstants,
+      constants
     );
-    this.scores._update().then(() => {
+    this.panelMenu._update().then(() => {
     }).catch((error: unknown) => {
-      logErr(error, 'Colosseum extension: Failed to update scores');
+      logErr(error, 'Colosseum extension: Failed to update panel menu');
     });
 
     Main.panel.addToStatusArea(
       "colosseum",
-      this.scores,
+      this.panelMenu,
       1,
       "right",
     );
@@ -62,9 +73,9 @@ export default class ColosseumExtension extends Extension {
   }
 
   disable(): void {
-    if (this.scores) {
-      this.scores.destroy();
-      this.scores = null;
+    if (this.panelMenu) {
+      this.panelMenu.destroy();
+      this.panelMenu = null;
     }
   }
 }

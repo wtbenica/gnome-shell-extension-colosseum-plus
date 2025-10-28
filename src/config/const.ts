@@ -1,16 +1,11 @@
 import DataLoader from "../data/data_loader.js";
 import { logErr } from "../utils/logging.js";
+import type { ColosseumConstants } from "./types.js";
 
-interface DynamicConstants {
-  PREF_LEAGUES?: Record<string, string>;
-  DISPLAY_NAME?: Record<string, string>;
-  SPORTS?: Record<string, Array<{ id: string; name: string; pref: string }>>;
-}
+let constantsPromise: Promise<ColosseumConstants> | null = null;
+let loadedConstants: ColosseumConstants | null = null;
 
-let constantsPromise: Promise<DynamicConstants> | null = null;
-let loadedConstants: DynamicConstants | null = null;
-
-export async function getConstants(): Promise<DynamicConstants> {
+export async function getConstants(): Promise<ColosseumConstants> {
   if (!constantsPromise) {
     constantsPromise = DataLoader.getDynamicConstants();
   }
@@ -71,9 +66,9 @@ export let SPORTS: Record<string, Array<{ id: string; name: string; pref: string
 
 // Initialize the dynamic constants
 getConstants().then(constants => {
-  PREF_LEAGUES = { ...PREF_LEAGUES, ...(constants.PREF_LEAGUES || {}) };
-  DISPLAY_NAME = { ...DISPLAY_NAME, ...(constants.DISPLAY_NAME || {}) };
-  SPORTS = { ...SPORTS, ...(constants.SPORTS || {}) };
+  PREF_LEAGUES = { ...PREF_LEAGUES, ...constants.PREF_LEAGUES };
+  DISPLAY_NAME = { ...DISPLAY_NAME, ...constants.DISPLAY_NAME };
+  SPORTS = { ...SPORTS, ...constants.SPORTS };
 }).catch(error => {
   logErr(error, 'Failed to load dynamic constants');
   // Keep static fallbacks

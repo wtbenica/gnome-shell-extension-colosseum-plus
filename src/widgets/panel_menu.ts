@@ -9,8 +9,9 @@ import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import * as CONSTANTS from "../config/const.js";
+import type { ColosseumConstants, Settings } from "../config/types.js";
 
-import ColosseumClient, { ColosseumConstants, Settings } from "../api/colosseum_client.js";
+import ColosseumClient from "../api/colosseum_client.js";
 import { GameLink } from "./game_link.js";
 import { TeamSelectorDialog } from "./team_selector.js";
 import { logDebug, logErr } from "../utils/logging.js";
@@ -33,9 +34,9 @@ interface ExtendedGame extends Game {
  * Main panel menu class for the Colosseum extension.
  * Manages the top bar icon, menu display, and data updates.
  */
-export const Colosseum = GObject.registerClass(
-  { GTypeName: "Colosseum" },
-  class Colosseum extends PanelMenu.Button {
+export const ColosseumPanelMenu = GObject.registerClass(
+  { GTypeName: "ColosseumPanelMenu" },
+  class ColosseumPanelMenu extends PanelMenu.Button {
     private _scores!: League[];
     private _nextGames!: League[];
     private _nextGamesMissingApiKey!: boolean;

@@ -7,12 +7,16 @@ import { PREF_UPDATE_FREQ, PREF_FOLLOWED_ONLY, PREF_COMPACT_MODE, PREF_SHOW_NEXT
 
 const EXT_PATH = import.meta.url;
 
+interface PreferencesWindow {
+  add(widget: Gtk.Widget): void;
+}
+
 class Preferences {
   private _builder: Gtk.Builder;
   private _settings: Gio.Settings;
   private _prefsPage: Gtk.Widget;
 
-  constructor(window: unknown, settings: Gio.Settings) {
+  constructor(window: PreferencesWindow, settings: Gio.Settings) {
     this._builder = new Gtk.Builder();
     this._settings = settings;
 
@@ -20,8 +24,8 @@ class Preferences {
       EXT_PATH.replace("prefs.js", "ui/prefs.ui").replace("file://", ""),
     );
 
-  this._prefsPage = this._builder.get_object("preferences_page") as Gtk.Widget;
-  (window as { add: (w: Gtk.Widget) => void }).add(this._prefsPage);
+    this._prefsPage = this._builder.get_object("preferences_page") as Gtk.Widget;
+    window.add(this._prefsPage);
 
     this._bootstrap();
   }
@@ -62,7 +66,7 @@ class Preferences {
 }
 
 export default class ColosseumPreferences extends ExtensionPreferences {
-  async fillPreferencesWindow(window: unknown): Promise<void> {
+  async fillPreferencesWindow(window: PreferencesWindow): Promise<void> {
     // Preferences constructor performs synchronous UI setup
     new Preferences(
       window,

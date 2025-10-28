@@ -3,13 +3,8 @@ import { loadEnv } from "../config/env_loader.js";
 import { SportradarClient } from "../api/sportradar_api_client.js";
 import { logErr } from "../utils/logging.js";
 import { Game, Team } from "../widgets/scoreboard_view.js";
-import type { Env } from "../config/types.js";
-import type { Competition as ApiCompetition, Competitor as ApiCompetitor } from "../api/types.js";
-
-// Re-export API types under the module's local names so other files importing
-// from data_loader can continue to use `Competition` and `Competitor`.
-export type Competition = ApiCompetition;
-export type Competitor = ApiCompetitor;
+import type { Env, ColosseumConstants } from "../config/types.js";
+import type { Competition, Competitor, SportEventBasic } from "../api/types.js";
 
 const env = loadEnv() as Env;
 const SPORT_RADAR_KEY = env.SPORT_RADAR_KEY || "";
@@ -25,37 +20,9 @@ interface TargetLeague {
 // `Competition` and `Competitor` are re-exported from the API schemas above.
 
 /**
- * Sport event from API
+ * Sport event from API - extends SportEventBasic with additional wrapper possibilities
  */
-interface SportEvent {
-  id?: string;
-  sport_event_id?: string;
-  scheduled?: string;
-  start_time?: string;
-  start?: string;
-  competitors?: Competitor[];
-  sport_event?: {
-    id?: string;
-    scheduled?: string;
-    start?: string;
-    competitors?: Competitor[];
-  };
-}
-
-/**
- * Dynamic constants for preferences
- */
-export interface DynamicConstants {
-  PREF_UPDATE_FREQ: string;
-  PREF_FOLLOWED_ONLY: string;
-  PREF_COMPACT_MODE: string;
-  PREF_POSITION_TOPBAR: string;
-  PREF_SHOW_NEXT_GAMES: string;
-  PREF_LEAGUES: Record<string, string>;
-  DISPLAY_NAME: Record<string, string>;
-  PREF_TOURNAMENTS: Record<string, string>;
-  SPORTS: Record<string, Array<{ id: string; name: string; pref: string }>>;
-}
+type SportEvent = SportEventBasic | { sport_event?: SportEventBasic };
 
 /**
  * Target leagues mapping
@@ -66,6 +33,13 @@ const TARGET_LEAGUES: Record<string, TargetLeague> = {
   MLS: { id: "sr:competition:242", category: "USA" },
   "Liga MX": { id: "sr:competition:27464", category: "Mexico" },
 };
+
+/**
+ * Normalizes competitor ID from various possible field names
+ */
+function normalizeCompetitorId(competitor: Competitor): string {
+  return String(competitor.id || competitor._id || competitor.uid || competitor.urn || '');
+}
 
 /**
  * Tournament preferences mapping
@@ -197,7 +171,7 @@ class DataLoaderClass {
 
     if (cachedTeams.length > 0) {
       // Ensure IDs are strings (normalize older shapes)
-      return cachedTeams.map((t) => ({ ...t, id: String((t as any).id || (t as any)._id || (t as any).uid || (t as any).urn || '') } as Competitor));
+      return cachedTeams.map((t) => ({ ...t, id: normalizeCompetitorId(t) }));
     }
 
     return await this._fetchCompetitionInfoFromAPI(competitionId);
@@ -225,8 +199,8 @@ class DataLoaderClass {
     // Normalize team IDs to strings before caching/returning
     const normalizedTeams: Competitor[] = teams.map((t) => ({
       ...t,
-      id: String((t as any).id || (t as any)._id || (t as any).uid || (t as any).urn || ''),
-    } as Competitor));
+      id: normalizeCompetitorId(t),
+    }));
 
     this._updateTeamsCache(competitionId, normalizedTeams);
 
@@ -271,7 +245,7 @@ class DataLoaderClass {
       const schedules =
         (await this.sportradarClient.getCompetitorSchedules(competitorId)) ||
           [];
-  return this._convertSchedulesToGames(schedules as any, daysAhead);
+      return this._convertSchedulesToGames(schedules, daysAhead);
     } catch (e) {
       logErr(e, `Error fetching schedules for competitor ${competitorId}`);
       return [];
@@ -286,7 +260,7 @@ class DataLoaderClass {
    * @returns Array of game events
    */
   private _convertSchedulesToGames(
-    schedules: Array<SportEvent | { sport_event?: SportEvent }>,
+    schedules: SportEvent[],
     daysAhead: number
   ): Game[] {
     const events: Game[] = [];
@@ -315,7 +289,7 @@ class DataLoaderClass {
    * @returns Game event or null if invalid
    */
   private _parseScheduleItem(
-    item: SportEvent | { sport_event?: SportEvent },
+    item: SportEvent,
     now: number,
     limitTs: number,
     seen: Set<string>
@@ -368,11 +342,24 @@ class DataLoaderClass {
    * Normalizes different sport event wrapper formats
    * 
    * @param item - Raw event item
-   * @returns Normalized sport event
+   * @returns Normalized sport event basic structure
    */
-  private _normalizeSportEvent(item: SportEvent | { sport_event?: SportEvent } | Record<string, unknown>): SportEvent {
-    const obj = item as { sport_event?: SportEvent } & Record<string, unknown>;
-    return (obj && (obj.sport_event || obj)) || (obj as SportEvent);
+  private _normalizeSportEvent(item: SportEvent): SportEventBasic {
+    // If item has a sport_event wrapper, unwrap it
+    if ('sport_event' in item && item.sport_event && typeof item.sport_event === 'object') {
+      const wrapped = item.sport_event as SportEventBasic;
+      return {
+        id: wrapped.id,
+        sport_event_id: wrapped.sport_event_id,
+        scheduled: wrapped.scheduled,
+        start_time: wrapped.start_time,
+        start: wrapped.start,
+        competitors: wrapped.competitors,
+        sport_event: null
+      };
+    }
+    // Otherwise it's already a SportEventBasic
+    return item as SportEventBasic;
   }
 
   /**
@@ -381,11 +368,12 @@ class DataLoaderClass {
    * @param se - Sport event
    * @returns Unique event ID string
    */
-  private _getEventId(se: SportEvent): string {
+  private _getEventId(se: SportEventBasic): string {
+    const sportEvent = se.sport_event as SportEventBasic | null | undefined;
     return (
       se.id ||
       se.sport_event_id ||
-      se.sport_event?.id ||
+      sportEvent?.id ||
       JSON.stringify(se)
     );
   }
@@ -396,13 +384,14 @@ class DataLoaderClass {
    * @param se - Sport event
    * @returns Timestamp in milliseconds or null if invalid
    */
-  private _parseEventTimestamp(se: SportEvent): number | null {
+  private _parseEventTimestamp(se: SportEventBasic): number | null {
+    const sportEvent = se.sport_event as SportEventBasic | null | undefined;
     const dateStr =
       se.scheduled ||
       se.start_time ||
       se.start ||
-      se.sport_event?.scheduled ||
-      se.sport_event?.start;
+      sportEvent?.scheduled ||
+      sportEvent?.start;
 
     if (!dateStr) {
       return null;
@@ -418,9 +407,10 @@ class DataLoaderClass {
    * @param se - Sport event
    * @returns Array of competitors
    */
-  private _getCompetitors(se: SportEvent): Competitor[] {
+  private _getCompetitors(se: SportEventBasic): Competitor[] {
+    const sportEvent = se.sport_event as SportEventBasic | null | undefined;
     const comps =
-      se.competitors || se.sport_event?.competitors || [];
+      se.competitors || sportEvent?.competitors || [];
     return Array.isArray(comps) ? comps : [];
   }
 
@@ -450,9 +440,9 @@ class DataLoaderClass {
   /**
    * Generates dynamic constants for preferences based on available competitions
    * 
-   * @returns Promise resolving to dynamic constants object
+   * @returns Promise resolving to Colosseum constants configuration
    */
-  async getDynamicConstants(): Promise<DynamicConstants> {
+  async getDynamicConstants(): Promise<ColosseumConstants> {
     const competitions = await this.fetchCompetitions();
 
     const PREF_LEAGUES: Record<string, string> = {};
@@ -484,7 +474,7 @@ class DataLoaderClass {
       DISPLAY_NAME[res.mapped] = res.name;
       SPORTS[res.mapped] = (res.teams || []).map((team) => {
         const name = team.name || 'Unknown';
-        const id = String((team as any).id || (team as any)._id || (team as any).uid || (team as any).urn || '');
+        const id = normalizeCompetitorId(team);
         return {
           id,
           name,

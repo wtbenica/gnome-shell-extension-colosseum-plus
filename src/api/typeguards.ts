@@ -13,7 +13,7 @@ export function isCompetitionArray(x: unknown): x is Competition[] {
 }
 
 export function isCompetitor(x: unknown): x is Competitor {
-  return isObject(x) && (typeof x['id'] === 'string' || typeof x['urn'] === 'string' || typeof x['uid'] === 'string') && typeof (x as any)['name'] === 'string';
+  return isObject(x) && (typeof x['id'] === 'string' || typeof x['urn'] === 'string' || typeof x['uid'] === 'string') && typeof x['name'] === 'string';
 }
 
 export function isCompetitorArray(x: unknown): x is Competitor[] {
@@ -22,7 +22,8 @@ export function isCompetitorArray(x: unknown): x is Competitor[] {
 
 export function isSportEventBasic(x: unknown): x is SportEventBasic {
   if (!isObject(x)) return false;
-  const hasId = typeof x['id'] === 'string' || typeof x['sport_event_id'] === 'string' || (isObject(x['sport_event']) && typeof (x['sport_event'] as any).id === 'string');
+  const sportEvent = x['sport_event'];
+  const hasId = typeof x['id'] === 'string' || typeof x['sport_event_id'] === 'string' || (isObject(sportEvent) && typeof sportEvent['id'] === 'string');
   if (!hasId) return false;
   if (x['competitors'] !== undefined) {
     if (!isCompetitorArray(x['competitors'])) return false;
