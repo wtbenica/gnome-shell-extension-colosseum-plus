@@ -1,7 +1,6 @@
-import Gio from '@girs/gio-2.0';
-import GLib from '@girs/glib-2.0';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import { logErr, logWarn } from '../utils/logging.js';
-import type { ZodType } from 'zod';
 
 const CACHE_VERSION = 1;
 const CACHE_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension']);
@@ -44,7 +43,7 @@ export class ApiCache {
      * @param {number} maxAgeDays - Maximum age in days before cache expires
     * @returns {Promise<T|null>} Cached data or null if not found/expired
      */
-    async get<T = unknown>(endpoint: string, params: Record<string, unknown> | null = null, maxAgeDays: number = MAX_CACHE_AGE_DAYS, schema?: ZodType<T>): Promise<T | null> {
+    async get<T = unknown>(endpoint: string, params: Record<string, unknown> | null = null, maxAgeDays: number = MAX_CACHE_AGE_DAYS, schema?: (x: unknown) => x is T): Promise<T | null> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
 
@@ -75,16 +74,16 @@ export class ApiCache {
                 return null;
             }
 
-            // If a schema is provided, validate the cached payload.
+            // If a schema/guard is provided, validate the cached payload.
             if (schema) {
                 try {
-                    const parsed = schema.safeParse(data.payload);
-                    if (!parsed.success) {
+                    const ok = (schema as (x: unknown) => boolean)(data.payload);
+                    if (!ok) {
                         logWarn(`ApiCache: cached payload failed validation for ${endpoint}, invalidating cache`, 'ApiCache');
                         try { file.delete(null); } catch (err) { logWarn(`ApiCache: failed to delete invalid cache file for ${endpoint}: ${err}`); }
                         return null;
                     }
-                    return parsed.data as T;
+                    return data.payload as T;
                 } catch (e) {
                     logErr(e, `ApiCache: error validating cached payload for ${endpoint}`);
                     try { file.delete(null); } catch (err) { logWarn(`ApiCache: failed to delete cache file after validation error for ${endpoint}: ${err}`); }
@@ -105,15 +104,15 @@ export class ApiCache {
      * @param {unknown} payload - Data to cache
      * @param {object} params - Parameters used in the API call, if any
      */
-    async set<T = unknown>(endpoint: string, payload: T, params: Record<string, unknown> | null = null, schema?: ZodType<T>): Promise<void> {
+    async set<T = unknown>(endpoint: string, payload: T, params: Record<string, unknown> | null = null, schema?: (x: unknown) => x is T): Promise<void> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
 
         // If a schema is provided, validate before writing to disk to avoid caching malformed data.
         if (schema) {
             try {
-                const parsed = schema.safeParse(payload as unknown);
-                if (!parsed.success) {
+                const ok = (schema as (x: unknown) => boolean)(payload as unknown);
+                if (!ok) {
                     logWarn(`ApiCache: payload failed validation for ${endpoint}; not caching`, 'ApiCache');
                     return;
                 }

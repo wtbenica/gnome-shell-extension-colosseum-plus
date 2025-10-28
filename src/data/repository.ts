@@ -1,7 +1,7 @@
-import Gio from '@girs/gio-2.0';
+import Gio from 'gi://Gio';
 
 import { Game } from "../widgets/scoreboard_view.js";
-import { logWarn } from '../utils/logging';
+import { logWarn } from '../utils/logging.js';
 
 /**
  * Represents a league with its games

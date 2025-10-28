@@ -130,7 +130,7 @@ export const TeamSelectorDialog = GObject.registerClass(
               teams.forEach((team: Competitor) => (team.leagueName = comp.name));
 
               // Sort this competition's teams by name for stable order
-              teams.sort((a: Competitor, b: Competitor) => a.name.localeCompare(b.name));
+              teams.sort((a: Competitor, b: Competitor) => (a.name || '').localeCompare(b.name || ''));
 
               // Remove the status label and render this competition's teams into the league container
               leagueContainer.remove_child(statusLabel);

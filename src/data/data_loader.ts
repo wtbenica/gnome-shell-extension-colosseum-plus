@@ -4,7 +4,7 @@ import { SportradarClient } from "../api/sportradar_api_client.js";
 import { logErr } from "../utils/logging.js";
 import { Game, Team } from "../widgets/scoreboard_view.js";
 import type { Env } from "../config/types.js";
-import type { Competition as ApiCompetition, Competitor as ApiCompetitor } from "../api/schemas.js";
+import type { Competition as ApiCompetition, Competitor as ApiCompetitor } from "../api/types.js";
 
 // Re-export API types under the module's local names so other files importing
 // from data_loader can continue to use `Competition` and `Competitor`.
@@ -178,7 +178,12 @@ class DataLoaderClass {
   private _updateCompetitionsCache(competitions: Competition[]): void {
     const currentLeagues = this.cacheManager.getLeagues();
     const currentTeams = this.cacheManager.data.teams || {};
-    this.cacheManager.save(currentLeagues, currentTeams, competitions);
+    this.cacheManager.save({
+      lastUpdate: Date.now(),
+      leagues: currentLeagues,
+      teams: currentTeams,
+      rawCompetitions: competitions,
+    });
   }
 
   /**
@@ -191,7 +196,8 @@ class DataLoaderClass {
     const cachedTeams = this.cacheManager.getTeams(competitionId);
 
     if (cachedTeams.length > 0) {
-      return cachedTeams;
+      // Ensure IDs are strings (normalize older shapes)
+      return cachedTeams.map((t) => ({ ...t, id: String((t as any).id || (t as any)._id || (t as any).uid || (t as any).urn || '') } as Competitor));
     }
 
     return await this._fetchCompetitionInfoFromAPI(competitionId);
@@ -216,9 +222,15 @@ class DataLoaderClass {
     }
 
     const teams = competitionInfo.season.competitors;
-    this._updateTeamsCache(competitionId, teams);
+    // Normalize team IDs to strings before caching/returning
+    const normalizedTeams: Competitor[] = teams.map((t) => ({
+      ...t,
+      id: String((t as any).id || (t as any)._id || (t as any).uid || (t as any).urn || ''),
+    } as Competitor));
 
-    return teams;
+    this._updateTeamsCache(competitionId, normalizedTeams);
+
+    return normalizedTeams;
   }
 
   /**
@@ -236,7 +248,12 @@ class DataLoaderClass {
     const currentTeams = this.cacheManager.data.teams || {};
 
     currentTeams[competitionId] = teams;
-    this.cacheManager.save(currentLeagues, currentTeams, currentCompetitions);
+    this.cacheManager.save({
+      lastUpdate: Date.now(),
+      leagues: currentLeagues,
+      teams: currentTeams,
+      rawCompetitions: currentCompetitions,
+    });
   }
 
   /**
@@ -254,7 +271,7 @@ class DataLoaderClass {
       const schedules =
         (await this.sportradarClient.getCompetitorSchedules(competitorId)) ||
           [];
-      return this._convertSchedulesToGames(schedules, daysAhead);
+  return this._convertSchedulesToGames(schedules as any, daysAhead);
     } catch (e) {
       logErr(e, `Error fetching schedules for competitor ${competitorId}`);
       return [];
@@ -465,13 +482,17 @@ class DataLoaderClass {
         .toLowerCase()
         .replace(/\s+/g, "")}-enabled`;
       DISPLAY_NAME[res.mapped] = res.name;
-      SPORTS[res.mapped] = (res.teams || []).map((team) => ({
-        id: team.id,
-        name: team.name,
-        pref: `${res.mapped.toLowerCase()}-${team.name
-          .toLowerCase()
-          .replace(/\s+/g, "")}`,
-      }));
+      SPORTS[res.mapped] = (res.teams || []).map((team) => {
+        const name = team.name || 'Unknown';
+        const id = String((team as any).id || (team as any)._id || (team as any).uid || (team as any).urn || '');
+        return {
+          id,
+          name,
+          pref: `${res.mapped.toLowerCase()}-${name
+            .toLowerCase()
+            .replace(/\s+/g, "")}`,
+        };
+      });
     }
 
     return {

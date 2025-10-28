@@ -1,22 +1,12 @@
 import Gio from 'gi://Gio';
-import GLib from "@girs/glib-2.0";
-import Soup from "@girs/soup-3.0";
+import GLib from 'gi://GLib';
+import Soup from 'gi://Soup?version=3.0';
 
 import { logErr, logWarn, logFile } from "../utils/logging.js";
 import { ApiCache } from "../data/api_cache.js";
-import { Competition, Competitor } from "../data/data_loader.js";
-import { ZodType } from "zod";
-import {
-  competitionsResponseSchema,
-  seasonsResponseSchema,
-  competitorsResponseSchema,
-  schedulesResponseSchema,
-  competitionSchema,
-  seasonSchema,
-  competitorSchema,
-  sportEventBasicSchema,
-} from "./schemas.js";
-import type { SportEventBasic } from "./schemas.js";
+import type { Competition, Competitor } from "../api/types.js";
+import type { SportEventBasic } from "../api/types.js";
+import { isCompetitionArray, isCompetitorArray, isSportEventBasicArray } from "../api/typeguards.js";
 
 /**
  * Sportradar API client for soccer data
@@ -39,7 +29,7 @@ export class SportradarClient {
   /**
    * Make a GET request to Sportradar API
    */
-  async request<T = unknown>(endpoint: string, schema?: ZodType<T>): Promise<T | null> {
+  async request<T = unknown>(endpoint: string, schema?: (x: unknown) => x is T): Promise<T | null> {
     if (!this.apiKey) {
       logFile(`SKIPPED: ${endpoint} - No API key configured`, 'sportradar-api-calls.log');
       logWarn(`SportradarClient: no API key provided, skipping request to ${endpoint}`, 'SportradarClient');
@@ -94,11 +84,15 @@ export class SportradarClient {
                 try {
                   const json = JSON.parse(text);
                   if (schema) {
-                    const parsed = schema.safeParse(json);
-                    if (parsed.success) {
-                      resolve(parsed.data as T);
-                    } else {
-                      logWarn(`SportradarClient: validation failed for ${endpoint}: ${JSON.stringify(parsed.error.format()).slice(0, 200)}`, 'SportradarClient');
+                    try {
+                      if (schema(json)) {
+                        resolve(json as T);
+                      } else {
+                        logWarn(`SportradarClient: validation predicate failed for ${endpoint}`, 'SportradarClient');
+                        resolve(null);
+                      }
+                    } catch (e) {
+                      logErr(e, `SportradarClient: validation predicate threw for ${endpoint}`);
                       resolve(null);
                     }
                   } else {
@@ -136,7 +130,7 @@ export class SportradarClient {
     const cacheKey = `competitions_${locale}`;
 
     // Try cache first (7 day TTL for competition metadata)
-    const cached = await this._cache.get<Competition[]>(cacheKey, null, 7, competitionSchema.array() as ZodType<Competition[]>);
+    const cached = await this._cache.get<Competition[]>(cacheKey, null, 7, isCompetitionArray);
     if (cached) {
       logFile(`CACHE HIT: competitions (${locale})`, 'sportradar-api-calls.log');
       return cached as Competition[];
@@ -144,11 +138,11 @@ export class SportradarClient {
 
     logFile(`CACHE MISS: competitions (${locale}) - fetching from API`, 'sportradar-api-calls.log');
 
-    const response = await this.request(`${locale}/competitions.json`, competitionsResponseSchema) as { competitions?: Competition[] } | null;
+    const response = await this.request(`${locale}/competitions.json`);
 
-    if (response && response.competitions && Array.isArray(response.competitions)) {
-      await this._cache.set<Competition[]>(cacheKey, response.competitions, null, competitionSchema.array() as ZodType<Competition[]>);
-      return response.competitions;
+    if (response && Array.isArray((response as any).competitions) && isCompetitionArray((response as any).competitions)) {
+      await this._cache.set<Competition[]>(cacheKey, (response as any).competitions, null, isCompetitionArray);
+      return (response as any).competitions;
     }
 
     return [];
@@ -161,7 +155,7 @@ export class SportradarClient {
     const cacheKey = `seasons_${competitionId}_${locale}`;
 
     // Try cache first (7 day TTL for season metadata)
-    const cached = await this._cache.get<Array<{ id: string; start_date?: string }>>(cacheKey, null, 7, seasonSchema.array() as ZodType<Array<{ id: string; start_date?: string }>>);
+    const cached = await this._cache.get<Array<{ id: string; start_date?: string }>>(cacheKey, null, 7);
     if (cached) {
       logFile(`CACHE HIT: seasons for competition ${competitionId}`, 'sportradar-api-calls.log');
       return cached;
@@ -169,11 +163,10 @@ export class SportradarClient {
 
     logFile(`CACHE MISS: seasons for competition ${competitionId} - fetching from API`, 'sportradar-api-calls.log');
 
-    const response = await this.request(`${locale}/competitions/${competitionId}/seasons.json`, seasonsResponseSchema) as { seasons?: Array<{ id: string; start_date?: string }> } | null;
-
-    if (response && response.seasons && Array.isArray(response.seasons)) {
-      await this._cache.set<Array<{ id: string; start_date?: string }>>(cacheKey, response.seasons, null, seasonSchema.array() as ZodType<Array<{ id: string; start_date?: string }>>);
-      return response.seasons;
+    const response = await this.request(`${locale}/competitions/${competitionId}/seasons.json`);
+    if (response && Array.isArray((response as any).seasons)) {
+      await this._cache.set<Array<{ id: string; start_date?: string }>>(cacheKey, (response as any).seasons, null);
+      return (response as any).seasons;
     }
 
     return [];
@@ -186,7 +179,7 @@ export class SportradarClient {
     const cacheKey = `competitors_${seasonId}_${locale}`;
 
     // Try cache first (7 day TTL for competitor metadata)
-    const cached = await this._cache.get<Competitor[]>(cacheKey, null, 7, competitorSchema.array() as ZodType<Competitor[]>);
+    const cached = await this._cache.get<Competitor[]>(cacheKey, null, 7, isCompetitorArray);
     if (cached) {
       logFile(`CACHE HIT: competitors for season ${seasonId}`, 'sportradar-api-calls.log');
       return cached;
@@ -194,11 +187,10 @@ export class SportradarClient {
 
     logFile(`CACHE MISS: competitors for season ${seasonId} - fetching from API`, 'sportradar-api-calls.log');
 
-    const response = await this.request(`${locale}/seasons/${seasonId}/competitors.json`, competitorsResponseSchema) as { season_competitors?: Competitor[] } | null;
-
-    if (response && response.season_competitors && Array.isArray(response.season_competitors)) {
-      await this._cache.set<Competitor[]>(cacheKey, response.season_competitors, null, competitorSchema.array() as ZodType<Competitor[]>);
-      return response.season_competitors;
+    const response = await this.request(`${locale}/seasons/${seasonId}/competitors.json`);
+    if (response && Array.isArray((response as any).season_competitors) && isCompetitorArray((response as any).season_competitors)) {
+      await this._cache.set<Competitor[]>(cacheKey, (response as any).season_competitors, null, isCompetitorArray);
+      return (response as any).season_competitors;
     }
 
     return [];
@@ -234,7 +226,7 @@ export class SportradarClient {
     const cacheKey = `competitor_schedules_${competitorId}_${locale}`;
 
     // Try cache first (1 day TTL for schedules - they change daily)
-    const cached = await this._cache.get<SportEventBasic[]>(cacheKey, null, 1, sportEventBasicSchema.array() as unknown as ZodType<SportEventBasic[]>);
+    const cached = await this._cache.get<SportEventBasic[]>(cacheKey, null, 1, isSportEventBasicArray);
     if (cached) {
       logFile(`CACHE HIT: schedules for competitor ${competitorId}`, 'sportradar-api-calls.log');
       return cached;
@@ -251,18 +243,12 @@ export class SportradarClient {
     // Create the request promise and store it
     const requestPromise = (async () => {
       try {
-        const response = await this.request(`${locale}/competitors/${competitorId}/schedules.json`, schedulesResponseSchema) as { schedules?: SportEventBasic[] } | null;
-
-        if (!response) {
-          return null;
-        }
-
-
-        const schedules = response.schedules || [];
-
+        const response = await this.request(`${locale}/competitors/${competitorId}/schedules.json`);
+        if (!response) return null;
+        const schedules = (response as any).schedules || [];
+        if (!Array.isArray(schedules) || !isSportEventBasicArray(schedules)) return null;
         // Cache the result (1 day TTL)
-        await this._cache.set<SportEventBasic[]>(cacheKey, schedules, null, sportEventBasicSchema.array() as unknown as ZodType<SportEventBasic[]>);
-
+        await this._cache.set<SportEventBasic[]>(cacheKey, schedules, null, isSportEventBasicArray);
         return schedules;
       } finally {
         // Remove from pending requests when complete

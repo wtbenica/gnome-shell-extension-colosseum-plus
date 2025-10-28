@@ -1,6 +1,14 @@
-.github/copilot-instructions.md
-.github/ideas.md
+.github
 *.zip
 .env
 dist/
 node_modules/
+
+# Yarn 4+ (Berry)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*

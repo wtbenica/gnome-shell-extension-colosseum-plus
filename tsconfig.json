@@ -14,7 +14,8 @@
     "allowSyntheticDefaultImports": true,
     "types": [
       "@girs/gjs",
-      "@girs/gnome-shell/ambient"
+      "@girs/gnome-shell/ambient",
+      "@girs/soup-3.0"
     ],
     "skipLibCheck": true
   },
