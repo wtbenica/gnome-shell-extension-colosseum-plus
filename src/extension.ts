@@ -1,16 +1,12 @@
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
-import GLib from 'gi://GLib';
 
 import { getConstants } from "./config/const.js";
-import type { ColosseumConstants } from "./config/types.js";
-import { ColosseumPanelMenu } from "./widgets/panel_menu.js";
 import DataLoader from "./data/data_loader.js";
 import { logErr } from "./utils/logging.js";
+import { ColosseumPanelMenu } from "./widgets/panel_menu.js";
 
-// Ensure log directory exists
-const LOG_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension', 'logs']);
-GLib.mkdir_with_parents(LOG_DIR, 0o755);
+import type { ColosseumConstants } from "./config/types.js";
 
 export default class ColosseumExtension extends Extension {
   panelMenu: InstanceType<typeof ColosseumPanelMenu> | null = null;

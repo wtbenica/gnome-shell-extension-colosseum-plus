@@ -1,13 +1,19 @@
-import { CacheManager } from "./local_cache_manager.js";
-import { loadEnv } from "../config/env_loader.js";
+import GLib from 'gi://GLib';
+
 import { SportradarClient } from "../api/sportradar_api_client.js";
+import { CACHE, TIMING } from "../config/constants.js";
+import { loadEnv } from "../config/env_loader.js";
 import { logErr } from "../utils/logging.js";
 import { Game, Team } from "../widgets/scoreboard_view.js";
-import type { Env, ColosseumConstants } from "../config/types.js";
+import { CacheManager, CacheType } from "./cache.js";
+
 import type { Competition, Competitor, SportEventBasic } from "../api/types.js";
+import type { ColosseumConstants, Env } from "../config/types.js";
 
 const env = loadEnv() as Env;
 const SPORT_RADAR_KEY = env.SPORT_RADAR_KEY || "";
+const SCHEMA_ID = "org.gnome.shell.extensions.colosseum";
+const API_CACHE_PATH = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-api']);
 
 /**
  * Target leagues configuration
@@ -57,6 +63,16 @@ const PREF_TOURNAMENTS: Record<string, string> = {
 };
 
 /**
+ * Local data cache structure
+ */
+interface LocalDataCache {
+  lastUpdate: number;
+  leagues: Record<string, unknown>;
+  teams: Record<string, Competitor[]>;
+  rawCompetitions: Competition[];
+}
+
+/**
  * Manages data loading, caching, and API interactions for sports data
  */
 class DataLoaderClass {
@@ -64,7 +80,7 @@ class DataLoaderClass {
   private sportradarClient: SportradarClient;
 
   constructor() {
-    this.cacheManager = new CacheManager();
+    this.cacheManager = new CacheManager(SCHEMA_ID, API_CACHE_PATH);
     this.sportradarClient = new SportradarClient(SPORT_RADAR_KEY);
   }
 
@@ -74,10 +90,14 @@ class DataLoaderClass {
    * @returns Promise resolving to array of competitions
    */
   async fetchCompetitions(): Promise<Competition[]> {
-    const cachedCompetitions = this.cacheManager.getRawCompetitions();
+    const cachedData = this.cacheManager.get<LocalDataCache>(
+      'data',
+      CacheType.LOCAL,
+      CACHE.API_MAX_AGE
+    );
 
-    if (cachedCompetitions.length > 0) {
-      return this._synthesizeCompetitionsFromCache(cachedCompetitions);
+    if (cachedData?.rawCompetitions && cachedData.rawCompetitions.length > 0) {
+      return this._synthesizeCompetitionsFromCache(cachedData.rawCompetitions);
     }
 
     return await this._fetchCompetitionsFromAPI();
@@ -150,14 +170,20 @@ class DataLoaderClass {
    * @param competitions - Competitions to cache
    */
   private _updateCompetitionsCache(competitions: Competition[]): void {
-    const currentLeagues = this.cacheManager.getLeagues();
-    const currentTeams = this.cacheManager.data.teams || {};
-    this.cacheManager.save({
+    const cachedData = this.cacheManager.get<LocalDataCache>(
+      'data',
+      CacheType.LOCAL,
+      CACHE.API_MAX_AGE
+    );
+
+    const updatedData: LocalDataCache = {
       lastUpdate: Date.now(),
-      leagues: currentLeagues,
-      teams: currentTeams,
+      leagues: cachedData?.leagues || {},
+      teams: cachedData?.teams || {},
       rawCompetitions: competitions,
-    });
+    };
+
+    this.cacheManager.set('data', updatedData, CacheType.LOCAL);
   }
 
   /**
@@ -167,9 +193,14 @@ class DataLoaderClass {
    * @returns Promise resolving to array of teams/competitors
    */
   async fetchCompetitionInfo(competitionId: string): Promise<Competitor[]> {
-    const cachedTeams = this.cacheManager.getTeams(competitionId);
+    const cachedData = this.cacheManager.get<LocalDataCache>(
+      'data',
+      CacheType.LOCAL,
+      CACHE.API_MAX_AGE
+    );
 
-    if (cachedTeams.length > 0) {
+    const cachedTeams = cachedData?.teams?.[competitionId];
+    if (cachedTeams && cachedTeams.length > 0) {
       // Ensure IDs are strings (normalize older shapes)
       return cachedTeams.map((t) => ({ ...t, id: normalizeCompetitorId(t) }));
     }
@@ -217,17 +248,21 @@ class DataLoaderClass {
     competitionId: string,
     teams: Competitor[]
   ): void {
-    const currentLeagues = this.cacheManager.getLeagues();
-    const currentCompetitions = this.cacheManager.getRawCompetitions();
-    const currentTeams = this.cacheManager.data.teams || {};
+    const cachedData = this.cacheManager.get<LocalDataCache>(
+      'data',
+      CacheType.LOCAL,
+      CACHE.API_MAX_AGE
+    );
 
-    currentTeams[competitionId] = teams;
-    this.cacheManager.save({
+    const updatedTeams = { ...(cachedData?.teams || {}), [competitionId]: teams };
+    const updatedData: LocalDataCache = {
       lastUpdate: Date.now(),
-      leagues: currentLeagues,
-      teams: currentTeams,
-      rawCompetitions: currentCompetitions,
-    });
+      leagues: cachedData?.leagues || {},
+      teams: updatedTeams,
+      rawCompetitions: cachedData?.rawCompetitions || [],
+    };
+
+    this.cacheManager.set('data', updatedData, CacheType.LOCAL);
   }
 
   /**
@@ -239,7 +274,7 @@ class DataLoaderClass {
    */
   async fetchCompetitorSchedules(
     competitorId: string,
-    daysAhead: number = 7
+    daysAhead: number = TIMING.DAYS_AHEAD
   ): Promise<Game[]> {
     try {
       const schedules =

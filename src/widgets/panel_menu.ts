@@ -14,7 +14,7 @@ import type { ColosseumConstants, Settings } from "../config/types.js";
 import ColosseumClient from "../api/colosseum_client.js";
 import { GameLink } from "./game_link.js";
 import { TeamSelectorDialog } from "./team_selector.js";
-import { logDebug, logErr } from "../utils/logging.js";
+import { logDebug, logErr, logWarn } from "../utils/logging.js";
 import { getAccentColor } from "../utils/accent_color.js";
 import { addGamesToGrid, Game } from "./scoreboard_view.js";
 import { Repository, League } from "../data/repository.js";
@@ -584,6 +584,12 @@ export const ColosseumPanelMenu = GObject.registerClass(
      * Sets the text in the top bar based on current games
      */
     private _setTopBarText(): void {
+      // Ensure widgets are initialized before trying to access them
+      if (!this._icon || !this._panelBoxLayout || !this._menuText) {
+        logWarn('Panel widgets not initialized yet, skipping top bar text update', 'panel_menu');
+        return;
+      }
+
       const stats = this._calculateGameStats();
       let labelText = this._determineTopBarLabel(stats);
 

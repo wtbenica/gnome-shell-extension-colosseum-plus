@@ -3,7 +3,8 @@ import GLib from 'gi://GLib';
 import Soup from 'gi://Soup?version=3.0';
 
 import { logErr, logWarn, logFile } from "../utils/logging.js";
-import { ApiCache } from "../data/api_cache.js";
+import { CacheManager, CacheType } from "../data/cache.js";
+import { CACHE } from "../config/constants.js";
 import type { 
   Competition, 
   Competitor,
@@ -15,6 +16,9 @@ import type {
 import type { SportEventBasic } from "../api/types.js";
 import { isCompetitionArray, isCompetitorArray, isSportEventBasicArray } from "../api/typeguards.js";
 
+const SCHEMA_ID = "org.gnome.shell.extensions.colosseum";
+const API_CACHE_PATH = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-api']);
+
 /**
  * Sportradar API client for soccer data
  */
@@ -22,14 +26,14 @@ export class SportradarClient {
   apiKey: string;
   session: Soup.Session;
   _decoder: TextDecoder;
-  _cache: ApiCache;
+  _cache: CacheManager;
   _pendingRequests: Map<string, Promise<SportEventBasic[] | null>>;
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
     this.session = new Soup.Session();
     this._decoder = new TextDecoder();
-    this._cache = new ApiCache();
+    this._cache = new CacheManager(SCHEMA_ID, API_CACHE_PATH);
     this._pendingRequests = new Map(); // Track in-flight requests to prevent duplicates
   }
 
@@ -137,10 +141,10 @@ export class SportradarClient {
     const cacheKey = `competitions_${locale}`;
 
     // Try cache first (7 day TTL for competition metadata)
-    const cached = await this._cache.get<Competition[]>(cacheKey, null, 7, isCompetitionArray);
-    if (cached) {
+    const cached = this._cache.get<Competition[]>(cacheKey, CacheType.API, CACHE.METADATA_MAX_AGE);
+    if (cached && isCompetitionArray(cached)) {
       logFile(`CACHE HIT: competitions (${locale})`, 'sportradar-api-calls.log');
-      return cached as Competition[];
+      return cached;
     }
 
     logFile(`CACHE MISS: competitions (${locale}) - fetching from API`, 'sportradar-api-calls.log');
@@ -148,7 +152,7 @@ export class SportradarClient {
     const response = await this.request<CompetitionsApiResponse>(`${locale}/competitions.json`);
 
     if (response && Array.isArray(response.competitions) && isCompetitionArray(response.competitions)) {
-      await this._cache.set<Competition[]>(cacheKey, response.competitions, null, isCompetitionArray);
+      this._cache.set(cacheKey, response.competitions, CacheType.API);
       return response.competitions;
     }
 
@@ -162,7 +166,7 @@ export class SportradarClient {
     const cacheKey = `seasons_${competitionId}_${locale}`;
 
     // Try cache first (7 day TTL for season metadata)
-    const cached = await this._cache.get<Array<{ id: string; start_date?: string }>>(cacheKey, null, 7);
+    const cached = this._cache.get<Array<{ id: string; start_date?: string }>>(cacheKey, CacheType.API, CACHE.METADATA_MAX_AGE);
     if (cached) {
       logFile(`CACHE HIT: seasons for competition ${competitionId}`, 'sportradar-api-calls.log');
       return cached;
@@ -172,7 +176,7 @@ export class SportradarClient {
 
     const response = await this.request<SeasonsApiResponse>(`${locale}/competitions/${competitionId}/seasons.json`);
     if (response && Array.isArray(response.seasons)) {
-      await this._cache.set<Array<{ id: string; start_date?: string }>>(cacheKey, response.seasons, null);
+      this._cache.set(cacheKey, response.seasons, CacheType.API);
       return response.seasons;
     }
 
@@ -186,8 +190,8 @@ export class SportradarClient {
     const cacheKey = `competitors_${seasonId}_${locale}`;
 
     // Try cache first (7 day TTL for competitor metadata)
-    const cached = await this._cache.get<Competitor[]>(cacheKey, null, 7, isCompetitorArray);
-    if (cached) {
+    const cached = this._cache.get<Competitor[]>(cacheKey, CacheType.API, CACHE.METADATA_MAX_AGE);
+    if (cached && isCompetitorArray(cached)) {
       logFile(`CACHE HIT: competitors for season ${seasonId}`, 'sportradar-api-calls.log');
       return cached;
     }
@@ -196,7 +200,7 @@ export class SportradarClient {
 
     const response = await this.request<CompetitorsApiResponse>(`${locale}/seasons/${seasonId}/competitors.json`);
     if (response && Array.isArray(response.season_competitors) && isCompetitorArray(response.season_competitors)) {
-      await this._cache.set<Competitor[]>(cacheKey, response.season_competitors, null, isCompetitorArray);
+      this._cache.set(cacheKey, response.season_competitors, CacheType.API);
       return response.season_competitors;
     }
 
@@ -237,8 +241,8 @@ export class SportradarClient {
     const cacheKey = `competitor_schedules_${competitorId}_${locale}`;
 
     // Try cache first (1 day TTL for schedules - they change daily)
-    const cached = await this._cache.get<SportEventBasic[]>(cacheKey, null, 1, isSportEventBasicArray);
-    if (cached) {
+    const cached = this._cache.get<SportEventBasic[]>(cacheKey, CacheType.API, CACHE.SCHEDULES_MAX_AGE);
+    if (cached && isSportEventBasicArray(cached)) {
       logFile(`CACHE HIT: schedules for competitor ${competitorId}`, 'sportradar-api-calls.log');
       return cached;
     }
@@ -259,7 +263,7 @@ export class SportradarClient {
         const schedules = response.schedules || [];
         if (!Array.isArray(schedules) || !isSportEventBasicArray(schedules)) return null;
         // Cache the result (1 day TTL)
-        await this._cache.set<SportEventBasic[]>(cacheKey, schedules, null, isSportEventBasicArray);
+        this._cache.set(cacheKey, schedules, CacheType.API);
         return schedules;
       } finally {
         // Remove from pending requests when complete
@@ -274,11 +278,13 @@ export class SportradarClient {
   }
 
   /**
-   * Close the session
+   * Close the session and cleanup resources
    */
   destroy(): void {
     if (this.session) {
       (this.session as { abort: () => void }).abort();
     }
+    this._cache.destroy();
+    this._pendingRequests.clear();
   }
 }

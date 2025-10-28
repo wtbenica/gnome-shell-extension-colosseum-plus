@@ -230,10 +230,37 @@ export function logFile(message: string, filename: string = 'api_calls.log') {
   try {
     const timestamp = new Date().toISOString();
     const logEntry = `${timestamp} - ${message}\n`;
-    GLib.mkdir_with_parents(LOG_DIR, 0o755);
+    
+    // Ensure log directory exists
+    const logDir = Gio.File.new_for_path(LOG_DIR);
+    if (!logDir.query_exists(null)) {
+      try {
+        logDir.make_directory_with_parents(null);
+      } catch {
+        // Directory might already exist due to race condition
+        try {
+          GLib.spawn_command_line_sync(`mkdir -p "${LOG_DIR}"`);
+        } catch {
+          // If all else fails, silently skip logging to file
+          return;
+        }
+      }
+    }
+
     const apiLogFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, filename]));
-    const [success, contents] = apiLogFile.load_contents(null);
-    const existingContent = success ? new TextDecoder().decode(contents) : '';
+    
+    // Check if file exists before trying to load it
+    let existingContent = '';
+    if (apiLogFile.query_exists(null)) {
+      try {
+        const [success, contents] = apiLogFile.load_contents(null);
+        existingContent = success ? new TextDecoder().decode(contents) : '';
+      } catch {
+        // File exists but can't be read, start fresh
+        existingContent = '';
+      }
+    }
+    
     const newContent = existingContent + logEntry;
     apiLogFile.replace_contents(
       newContent,
@@ -266,11 +293,38 @@ export function logFile(message: string, filename: string = 'api_calls.log') {
 function logToFile(message: string, level: string) {
   // Always log to file in GJS
   try {
-    GLib.mkdir_with_parents(LOG_DIR, 0o755);
+    // Ensure log directory exists
+    const logDir = Gio.File.new_for_path(LOG_DIR);
+    if (!logDir.query_exists(null)) {
+      try {
+        logDir.make_directory_with_parents(null);
+      } catch {
+        // Directory might already exist due to race condition, or parent dirs don't exist
+        // Try to create with shell command as fallback
+        try {
+          GLib.spawn_command_line_sync(`mkdir -p "${LOG_DIR}"`);
+        } catch {
+          // If all else fails, silently skip logging to file
+          return;
+        }
+      }
+    }
+
     const logFileName = `${level}.log`;
     const levelLogFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, logFileName]));
-    const [success, contents] = levelLogFile.load_contents(null);
-    const existingContent = success ? new TextDecoder().decode(contents) : '';
+    
+    // Check if file exists before trying to load it
+    let existingContent = '';
+    if (levelLogFile.query_exists(null)) {
+      try {
+        const [success, contents] = levelLogFile.load_contents(null);
+        existingContent = success ? new TextDecoder().decode(contents) : '';
+      } catch {
+        // File exists but can't be read, start fresh
+        existingContent = '';
+      }
+    }
+    
     if (existingContent.length > 1024 * 1024) {
       const backupFile = Gio.File.new_for_path(GLib.build_filenamev([LOG_DIR, `${logFileName}.1`]));
       backupFile.replace_contents(
