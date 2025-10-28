@@ -1,17 +1,10 @@
 #!/bin/bash
 
-# Build the project
+# Build the project and package dist/
+set -e
 yarn build
 
-# Copy additional files to dist/
-cp .env dist/
-cp -r src/schemas dist/
-cp src/metadata.json dist/
-cp stylesheet.css dist/
-cp -r src/ui dist/
-cp -r src/icon dist/
-
-# Create zip file
+# Create zip file from dist
 cd dist
 zip -r ../colosseum.zip .
 

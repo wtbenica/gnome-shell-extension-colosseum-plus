@@ -1,6 +1,7 @@
 import Gio from '@girs/gio-2.0';
 import GLib from '@girs/glib-2.0';
 import { logErr, logWarn } from '../utils/logging.js';
+import type { ZodType } from 'zod';
 
 const CACHE_VERSION = 1;
 const CACHE_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension']);
@@ -27,7 +28,7 @@ export class ApiCache {
         }
     }
 
-    _getCacheKey(endpoint: string, params: unknown): string {
+    _getCacheKey(endpoint: string, params: Record<string, unknown> | null): string {
         const paramStr = JSON.stringify(params || {});
         return `${endpoint}_${GLib.compute_checksum_for_string(GLib.ChecksumType.MD5, paramStr, -1)}`;
     }
@@ -39,11 +40,11 @@ export class ApiCache {
     /**
      * Get cached data if available and not expired
      * @param {string} endpoint - API endpoint identifier
-     * @param {object} params - Parameters used in the API call
+    * @param {Record<string, unknown>|null} params - Parameters used in the API call
      * @param {number} maxAgeDays - Maximum age in days before cache expires
-     * @returns {Promise<unknown|null>} Cached data or null if not found/expired
+    * @returns {Promise<T|null>} Cached data or null if not found/expired
      */
-    async get(endpoint: string, params: unknown = null, maxAgeDays: number = MAX_CACHE_AGE_DAYS): Promise<unknown | null> {
+    async get<T = unknown>(endpoint: string, params: Record<string, unknown> | null = null, maxAgeDays: number = MAX_CACHE_AGE_DAYS, schema?: ZodType<T>): Promise<T | null> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
 
@@ -74,7 +75,24 @@ export class ApiCache {
                 return null;
             }
 
-            return data.payload;
+            // If a schema is provided, validate the cached payload.
+            if (schema) {
+                try {
+                    const parsed = schema.safeParse(data.payload);
+                    if (!parsed.success) {
+                        logWarn(`ApiCache: cached payload failed validation for ${endpoint}, invalidating cache`, 'ApiCache');
+                        try { file.delete(null); } catch (err) { logWarn(`ApiCache: failed to delete invalid cache file for ${endpoint}: ${err}`); }
+                        return null;
+                    }
+                    return parsed.data as T;
+                } catch (e) {
+                    logErr(e, `ApiCache: error validating cached payload for ${endpoint}`);
+                    try { file.delete(null); } catch (err) { logWarn(`ApiCache: failed to delete cache file after validation error for ${endpoint}: ${err}`); }
+                    return null;
+                }
+            }
+
+            return data.payload as T;
         } catch (e) {
             logErr(e, `Failed to read cache for ${endpoint}`);
             return null;
@@ -87,9 +105,23 @@ export class ApiCache {
      * @param {unknown} payload - Data to cache
      * @param {object} params - Parameters used in the API call, if any
      */
-    async set(endpoint: string, payload: unknown, params: unknown = null): Promise<void> {
+    async set<T = unknown>(endpoint: string, payload: T, params: Record<string, unknown> | null = null, schema?: ZodType<T>): Promise<void> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
+
+        // If a schema is provided, validate before writing to disk to avoid caching malformed data.
+        if (schema) {
+            try {
+                const parsed = schema.safeParse(payload as unknown);
+                if (!parsed.success) {
+                    logWarn(`ApiCache: payload failed validation for ${endpoint}; not caching`, 'ApiCache');
+                    return;
+                }
+            } catch (e) {
+                logErr(e, `ApiCache: error validating payload for ${endpoint}`);
+                return;
+            }
+        }
 
         const cacheData = {
             version: CACHE_VERSION,
@@ -116,7 +148,7 @@ export class ApiCache {
     /**
      * Invalidate a specific cache entry
      */
-    async invalidate(endpoint: string, params: unknown = null): Promise<void> {
+    async invalidate(endpoint: string, params: Record<string, unknown> | null = null): Promise<void> {
         const key = this._getCacheKey(endpoint, params);
         const file = this._getCacheFile(key);
         

@@ -4,7 +4,7 @@ import { logErr } from "../utils/logging.js";
 interface DynamicConstants {
   PREF_LEAGUES?: Record<string, string>;
   DISPLAY_NAME?: Record<string, string>;
-  SPORTS?: Record<string, unknown>;
+  SPORTS?: Record<string, Array<{ id: string; name: string; pref: string }>>;
 }
 
 let constantsPromise: Promise<DynamicConstants> | null = null;
@@ -67,7 +67,7 @@ export let PREF_TOURNAMENTS: Record<string, string> = {
   "UEFA Europa League": "uefaeuropa-enabled",
   "UEFA Women's Champions League": "uefawomenchampions-enabled",
 };
-export let SPORTS: Record<string, unknown> = {};
+export let SPORTS: Record<string, Array<{ id: string; name: string; pref: string }>> = {};
 
 // Initialize the dynamic constants
 getConstants().then(constants => {

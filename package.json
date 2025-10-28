@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "description": "A GNOME Shell extension for displaying sports scores and information",
   "homepage": "https://github.com/wtbenica/gnome-shell-extension-colosseum",
-  "main": "src/extension.js",
+  "main": "dist/extension.js",
   "scripts": {
-    "build": "tsc && (cd src && find . -name '*.js' -exec cp --parents {} ../dist/ \\;)",
+    "build": "tsc && mkdir -p dist && (cp .env dist/ || true) && cp src/metadata.json dist/ && cp stylesheet.css dist/ && cp -r src/ui dist/ && cp -r src/icon dist/ && (cp -r src/schemas dist/ || true)",
     "watch": "tsc --watch",
     "clean": "rm -rf dist",
-    "lint": "eslint src/**/*.ts src/**/*.js"
+    "lint": "eslint 'src/**/*.{ts,js}'"
   },
   "type": "module",
   "keywords": [
@@ -24,7 +24,8 @@
     "@girs/glib-2.0": "^2.86.0-4.0.0-beta.38",
     "@girs/gnome-shell": "^49.0.3",
     "@girs/soup-3.0": "^3.6.5-4.0.0-beta.38",
-    "ts-node": "10.9.2"
+    "ts-node": "10.9.2",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.38.0",

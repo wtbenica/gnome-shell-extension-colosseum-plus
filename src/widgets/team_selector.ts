@@ -7,10 +7,21 @@ import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
 
 import { logErr } from "../utils/logging.js";
 import DataLoader from "../data/data_loader.js";
+import type { Competition as ApiCompetition, Competitor as ApiCompetitor } from "../data/data_loader.js";
+
+type Competition = ApiCompetition & { _placeholder?: boolean };
+type Competitor = ApiCompetitor & { leagueName?: string };
 
 export const TeamSelectorDialog = GObject.registerClass(
   class TeamSelectorDialog extends ModalDialog.ModalDialog {
-    constructor(settings) {
+    private _settings: Gio.Settings;
+    private _contentBox: St.BoxLayout;
+  private _batchIndex!: number;
+  private _allTeams!: Competitor[];
+  private _followedCache!: Set<string>;
+  private _currentLeague!: string | null;
+
+    constructor(settings: Gio.Settings) {
       super({ styleClass: 'team-selector-dialog' });
 
       this._settings = settings;
@@ -53,7 +64,7 @@ export const TeamSelectorDialog = GObject.registerClass(
       this._populateTeamSelector();
     }
 
-    async _populateTeamSelector() {
+    async _populateTeamSelector(): Promise<void> {
       try {
         this._contentBox.destroy_all_children();
 
@@ -82,7 +93,7 @@ export const TeamSelectorDialog = GObject.registerClass(
         }
 
         // Start all competition fetches concurrently while showing headers immediately.
-        const fetchPromises = [];
+  const fetchPromises: Array<{ comp: Competition; leagueContainer: St.BoxLayout; statusLabel: St.Label; promise: Promise<Competitor[]> }> = [];
 
         for (const comp of competitions) {
           // Create a per-league container so we can display the header immediately
@@ -116,10 +127,10 @@ export const TeamSelectorDialog = GObject.registerClass(
           if (result.status === 'fulfilled') {
             const teams = result.value;
             if (teams && teams.length > 0) {
-              teams.forEach(team => (team.leagueName = comp.name));
+              teams.forEach((team: Competitor) => (team.leagueName = comp.name));
 
               // Sort this competition's teams by name for stable order
-              teams.sort((a, b) => a.name.localeCompare(b.name));
+              teams.sort((a: Competitor, b: Competitor) => a.name.localeCompare(b.name));
 
               // Remove the status label and render this competition's teams into the league container
               leagueContainer.remove_child(statusLabel);
@@ -130,7 +141,7 @@ export const TeamSelectorDialog = GObject.registerClass(
             }
           } else {
             // Fetch failed for this competition; log and show an error indicator in the UI
-            logErr(result.reason, `TeamSelector: Failed to fetch teams for competition ${comp.id}`);
+            logErr((result as PromiseRejectedResult).reason, `TeamSelector: Failed to fetch teams for competition ${comp.id}`);
             statusLabel.set_text('Error loading teams');
           }
         }
@@ -139,14 +150,14 @@ export const TeamSelectorDialog = GObject.registerClass(
         logErr(error, 'TeamSelector: Failed to populate team selector');
         this._contentBox.destroy_all_children();
         let errorLabel = new St.Label({
-          text: 'Error loading teams: ' + error.message,
+          text: 'Error loading teams: ' + (error as Error).message,
           style_class: 'no-teams-label',
         });
         this._contentBox.add_child(errorLabel);
       }
     }
 
-    _renderTeamsBatched(allTeams, followedTeams, accentColor) {
+    _renderTeamsBatched(allTeams: Competitor[], followedTeams: string[] | undefined, accentColor: string) {
       this._batchIndex = 0;
       this._allTeams = allTeams;
       this._followedCache = new Set(followedTeams || []);
@@ -161,7 +172,7 @@ export const TeamSelectorDialog = GObject.registerClass(
 
           // Add league header if needed
           if (this._currentLeague !== team.leagueName) {
-            this._currentLeague = team.leagueName;
+              this._currentLeague = team.leagueName ?? null;
             let leagueLabel = new St.Label({
               text: team.leagueName,
               style_class: 'team-selector-league-header',
@@ -243,7 +254,7 @@ export const TeamSelectorDialog = GObject.registerClass(
       });
     }
 
-    _renderTeamsBatchedForLeague(teams, leagueName, followedTeams, container, accentColor) {
+    _renderTeamsBatchedForLeague(teams: Competitor[], leagueName: string, followedTeams: string[] | undefined, container: St.BoxLayout | null, accentColor: string) {
       let batchIndex = 0;
       const batchSize = 12; // per-league batch size
       const followedCache = new Set(followedTeams || []);
@@ -339,3 +350,5 @@ export const TeamSelectorDialog = GObject.registerClass(
     }
   }
 );
+
+export default TeamSelectorDialog;

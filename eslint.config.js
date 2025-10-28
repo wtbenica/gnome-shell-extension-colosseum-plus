@@ -185,12 +185,5 @@ export default [
             ],
             '@typescript-eslint/no-explicit-any': 'warn',
         },
-    },
-    // Override for logging.ts to allow GJS log functions
-    {
-        files: ['src/utils/logging.ts'],
-        rules: {
-            'no-restricted-globals': 'off',
-        },
-    },
+    }
 ];

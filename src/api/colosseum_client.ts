@@ -32,12 +32,14 @@ export default class ColosseumClient {
     this._tournaments = Object.keys(this._CONSTANTS.PREF_TOURNAMENTS || {});
   }
 
-  async getScores(): Promise<unknown[]> {
-    return [];
+  async getScores(): Promise<Game[]> {
+    // TODO: implement actual score fetching via DataLoader
+    return [] as Game[];
   }
 
-  async getNextGames(): Promise<unknown[]> {
-    return [];
+  async getNextGames(): Promise<Game[]> {
+    // TODO: implement next-games fetching via DataLoader
+    return [] as Game[];
   }
 
   getEnabledLeagues(): string[] {

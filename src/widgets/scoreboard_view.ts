@@ -1,4 +1,3 @@
-// @ts-nocheck
 import Clutter from "gi://Clutter";
 import St from "gi://St";
 import { GameLink } from "./game_link.js";
@@ -52,7 +51,7 @@ export interface GameClient {
  * @returns The next available row offset after adding all games
  */
 export function addGamesToGrid(
-  grid: unknown,
+  grid: Clutter.GridLayout,
   games: Game[],
   offset: number = 0,
   _league: string | null = null,
@@ -94,17 +93,17 @@ export function addGamesToGrid(
     const homeFollowed = followedIds.includes(String(game.home.id));
     const awayFollowed = followedIds.includes(String(game.away.id));
 
-    const homeLabel = createTeamLabel(game.home.team, homeFollowed, accentColor);
-    const homeScore = createScoreLabel(game.home.score, homeFollowed);
-    const gameMeta = createMetaLabel(game.meta);
+  const homeLabel = createTeamLabel(game.home.team, homeFollowed, accentColor);
+  const homeScore = createScoreLabel(game.home.score, homeFollowed);
+  const gameMeta = createMetaLabel(game.meta);
 
     grid.attach(homeLabel, 0, homeRow, 1, 1);
     grid.attach(homeScore, 1, homeRow, 1, 1);
     grid.attach(gameMeta, 2, homeRow, 1, 1);
 
-    const awayLabel = createTeamLabel(game.away.team, awayFollowed, accentColor);
-    const awayScore = createScoreLabel(game.away.score, awayFollowed);
-    const gameLink = new GameLink(game.link);
+  const awayLabel = createTeamLabel(game.away.team, awayFollowed, accentColor);
+  const awayScore = createScoreLabel(game.away.score, awayFollowed);
+  const gameLink = new GameLink(game.link);
 
     grid.attach(awayLabel, 0, awayRow, 1, 1);
     grid.attach(awayScore, 1, awayRow, 1, 1);
@@ -136,7 +135,7 @@ function createTeamLabel(
   teamName: string,
   isFollowed: boolean,
   accentColor: string | null
-): unknown {
+): St.Label {
   const label = new St.Label({
     text: teamName,
     style_class: `team${isFollowed ? " team--followed" : ""}`,
@@ -162,7 +161,7 @@ function createTeamLabel(
  * @param isFollowed - Whether this team is followed by the user
  * @returns A configured St.Label for the score
  */
-function createScoreLabel(score: string, isFollowed: boolean): unknown {
+function createScoreLabel(score: string, isFollowed: boolean): St.Label {
   return new St.Label({
     text: score,
     style_class: `score${isFollowed ? " score--followed" : ""}`,
@@ -177,7 +176,7 @@ function createScoreLabel(score: string, isFollowed: boolean): unknown {
  * @param meta - The metadata text to display
  * @returns A configured St.Label for the metadata
  */
-function createMetaLabel(meta: string): unknown {
+function createMetaLabel(meta: string): St.Label {
   return new St.Label({
     text: meta,
     style_class: "meta",

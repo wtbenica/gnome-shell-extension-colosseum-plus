@@ -1,18 +1,12 @@
 import GLib from "@girs/glib-2.0";
 import Gio from "@girs/gio-2.0";
 
-import { logErr } from "../utils/logging.js";
-import { Competition, Competitor } from "./data_loader.js";
+import { logErr, logWarn } from "../utils/logging.js";
+import type { CacheData, Competitor } from "../api/schemas.js";
+import { cacheDataSchema } from "../api/schemas.js";
 
 const CACHE_FILE = GLib.get_user_cache_dir() + '/colosseum-data.json';
 const CACHE_DURATION_DAYS = 30;
-
-interface CacheData {
-  lastUpdate: number;
-  leagues: Competition[];
-  teams: Record<string, Competitor[]>;
-  rawCompetitions: Competition[];
-}
 
 /**
  * Manages local file cache for competitions and teams data
@@ -30,7 +24,6 @@ export class CacheManager {
    * Load cache from disk
    */
   load(): CacheData {
-
     try {
       const cacheFile = Gio.File.new_for_path(CACHE_FILE);
 
@@ -39,42 +32,71 @@ export class CacheManager {
 
         if (success) {
           const text = this._decoder.decode(contents);
-          const parsed = JSON.parse(text);
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(text);
+          } catch (e) {
+            logErr(e, 'CacheManager: Failed to parse cache JSON');
+            try { cacheFile.delete(null); } catch (err) { logWarn(`CacheManager: failed to delete invalid cache file: ${err}`); }
+            return this._emptyCache();
+          }
 
           // Handle legacy cache shape: some older saves stored competitions in `teams` by mistake.
           // If rawCompetitions is empty but teams is an array of competition-like objects,
           // migrate them into rawCompetitions and make teams an object map.
           try {
-            if ((!parsed.rawCompetitions || parsed.rawCompetitions.length === 0) && Array.isArray(parsed.teams) && parsed.teams.length > 0) {
-              const first = parsed.teams[0];
-              if (first && first.id && first.category) {
-                parsed.rawCompetitions = parsed.teams;
-                parsed.teams = {};
+            const parsedRec = parsed as Record<string, unknown>;
+            const maybeTeams = parsedRec.teams;
+            const rawComps = parsedRec.rawCompetitions;
+
+            if ((!rawComps || (Array.isArray(rawComps) && rawComps.length === 0)) && Array.isArray(maybeTeams) && (maybeTeams as unknown[]).length > 0) {
+              const first = (maybeTeams as unknown[])[0] as Record<string, unknown>;
+              if (first && typeof first.id === 'string' && typeof first.category === 'string') {
+                (parsedRec as Record<string, unknown>)['rawCompetitions'] = maybeTeams;
+                (parsedRec as Record<string, unknown>)['teams'] = {};
               }
             }
           } catch (e) {
             logErr(e, 'CacheManager: Error during cache migration');
           }
 
-          return parsed;
+          // Validate the parsed cache data against the schema
+          try {
+            const validated = cacheDataSchema.safeParse(parsed);
+            if (!validated.success) {
+              logWarn('CacheManager: cache file failed validation, invalidating', 'CacheManager');
+              try { cacheFile.delete(null); } catch (err) { logWarn(`CacheManager: failed to delete invalid cache file: ${err}`); }
+              return this._emptyCache();
+            }
+
+            return validated.data;
+          } catch (e) {
+            logErr(e, 'CacheManager: Error validating cache file');
+            try { cacheFile.delete(null); } catch (err) { logWarn(`CacheManager: failed to delete cache file after validation error: ${err}`); }
+            return this._emptyCache();
+          }
         }
       }
     } catch (error) {
       logErr(error, 'CacheManager: Failed to load cache');
     }
 
+    return this._emptyCache();
+  }
+
+  private _emptyCache(): CacheData {
     return {
       lastUpdate: 0,
       leagues: [],
       teams: {},
-      rawCompetitions: []
+      rawCompetitions: [],
     };
   }
 
   /**
    * Save cache to disk
    */
-  save(leagues: Competition[], teams: Record<string, Competitor[]>, rawCompetitions: Competition[]): void {
+  save(leagues: CacheData['leagues'], teams: CacheData['teams'], rawCompetitions: CacheData['rawCompetitions']): void {
     try {
       const cacheDir = Gio.File.new_for_path(GLib.get_user_cache_dir());
       if (!cacheDir.query_exists(null)) {
@@ -114,14 +136,14 @@ export class CacheManager {
   /**
    * Get cached competitions
    */
-  getRawCompetitions(): Competition[] {
+  getRawCompetitions(): CacheData['rawCompetitions'] {
     return this.data.rawCompetitions || [];
   }
 
   /**
    * Get cached leagues
    */
-  getLeagues(): Competition[] {
+  getLeagues(): CacheData['leagues'] {
     return this.data.leagues || [];
   }
 
@@ -129,6 +151,6 @@ export class CacheManager {
    * Get cached teams for a league
    */
   getTeams(leagueId: string): Competitor[] {
-    return this.data.teams?.[leagueId] || [];
+    return (this.data.teams?.[leagueId] as Competitor[]) || [];
   }
 }

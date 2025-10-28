@@ -4,6 +4,12 @@ import { SportradarClient } from "../api/sportradar_api_client.js";
 import { logErr } from "../utils/logging.js";
 import { Game, Team } from "../widgets/scoreboard_view.js";
 import type { Env } from "../config/types.js";
+import type { Competition as ApiCompetition, Competitor as ApiCompetitor } from "../api/schemas.js";
+
+// Re-export API types under the module's local names so other files importing
+// from data_loader can continue to use `Competition` and `Competitor`.
+export type Competition = ApiCompetition;
+export type Competitor = ApiCompetitor;
 
 const env = loadEnv() as Env;
 const SPORT_RADAR_KEY = env.SPORT_RADAR_KEY || "";
@@ -16,29 +22,7 @@ interface TargetLeague {
   category: string;
 }
 
-/**
- * Competition information from API
- */
-export interface Competition {
-  id: string;
-  name: string;
-  category: string;
-  _placeholder?: boolean;
-}
-
-/**
- * Team/competitor information
- */
-export interface Competitor {
-  id: string;
-  name: string;
-  common_name?: string;
-  original_name?: string;
-  qualifier?: string;
-  urn?: string;
-  _id?: string;
-  uid?: string;
-}
+// `Competition` and `Competitor` are re-exported from the API schemas above.
 
 /**
  * Sport event from API
@@ -159,7 +143,7 @@ class DataLoaderClass {
    * @returns Promise resolving to filtered competitions array
    */
   private async _fetchCompetitionsFromAPI(): Promise<Competition[]> {
-    const competitions = await this.sportradarClient.getCompetitions() as Competition[];
+  const competitions = await this.sportradarClient.getCompetitions();
 
     if (competitions.length === 0) {
       return [];
@@ -222,7 +206,7 @@ class DataLoaderClass {
   private async _fetchCompetitionInfoFromAPI(
     competitionId: string
   ): Promise<Competitor[]> {
-    const competitionInfo = await this.sportradarClient.getCompetitionInfo(competitionId) as { season?: { competitors?: Competitor[] } };
+    const competitionInfo = await this.sportradarClient.getCompetitionInfo(competitionId);
 
     if (
       !competitionInfo?.season?.competitors ||
@@ -268,8 +252,8 @@ class DataLoaderClass {
   ): Promise<Game[]> {
     try {
       const schedules =
-        (await this.sportradarClient.getCompetitorSchedules(competitorId)) as unknown[] ||
-        [];
+        (await this.sportradarClient.getCompetitorSchedules(competitorId)) ||
+          [];
       return this._convertSchedulesToGames(schedules, daysAhead);
     } catch (e) {
       logErr(e, `Error fetching schedules for competitor ${competitorId}`);
@@ -285,7 +269,7 @@ class DataLoaderClass {
    * @returns Array of game events
    */
   private _convertSchedulesToGames(
-    schedules: unknown[],
+    schedules: Array<SportEvent | { sport_event?: SportEvent }>,
     daysAhead: number
   ): Game[] {
     const events: Game[] = [];
@@ -314,7 +298,7 @@ class DataLoaderClass {
    * @returns Game event or null if invalid
    */
   private _parseScheduleItem(
-    item: unknown,
+    item: SportEvent | { sport_event?: SportEvent },
     now: number,
     limitTs: number,
     seen: Set<string>
@@ -369,9 +353,9 @@ class DataLoaderClass {
    * @param item - Raw event item
    * @returns Normalized sport event
    */
-  private _normalizeSportEvent(item: unknown): SportEvent {
-    const obj = item as { sport_event?: SportEvent };
-    return (obj && (obj.sport_event || obj)) || obj;
+  private _normalizeSportEvent(item: SportEvent | { sport_event?: SportEvent } | Record<string, unknown>): SportEvent {
+    const obj = item as { sport_event?: SportEvent } & Record<string, unknown>;
+    return (obj && (obj.sport_event || obj)) || (obj as SportEvent);
   }
 
   /**
