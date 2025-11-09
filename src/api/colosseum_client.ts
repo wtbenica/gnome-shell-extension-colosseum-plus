@@ -68,6 +68,15 @@ export default class ColosseumClient {
     return await DataLoader.fetchCompetitorSchedules(String(teamId), 7);
   }
 
+  /**
+   * Fetches live score for a game event
+   * @param eventId - The sport event ID
+   * @returns Promise with live score data
+   */
+  async getLiveScore(eventId: string): Promise<{ homeScore?: number; awayScore?: number; status?: string } | null> {
+    return await DataLoader.fetchLiveScore(eventId);
+  }
+
   isFollowOnlyEnabled(): boolean {
     return this._settings.get_boolean(this._CONSTANTS.PREF_FOLLOWED_ONLY);
   }

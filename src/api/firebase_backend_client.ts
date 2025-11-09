@@ -7,8 +7,10 @@
 
 import Soup from 'gi://Soup?version=3.0';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import { logInfo, logErr, logFile } from '../utils/logging.js';
 import type { Competition, Competitor, Season, SportEventBasic } from './types.js';
+import { CacheManager, CacheType } from '../data/cache.js';
 
 export interface Country {
   id: string;
@@ -26,6 +28,16 @@ export interface LiveScore {
   matchTime?: string;
 }
 
+// Cache TTLs in milliseconds
+const CACHE_TTL = {
+  COUNTRIES: 24 * 60 * 60 * 1000,      // 1 day
+  COMPETITIONS: 6 * 60 * 60 * 1000,    // 6 hours
+  SEASONS: 6 * 60 * 60 * 1000,         // 6 hours
+  COMPETITORS: 24 * 60 * 60 * 1000,    // 1 day
+  SCHEDULES: 10 * 60 * 1000,           // 10 minutes
+  LIVE_SCORE: 30 * 1000,               // 30 seconds
+};
+
 /**
  * Firebase Backend Client for accessing cached Sportradar data
  */
@@ -33,12 +45,17 @@ export class FirebaseBackendClient {
   private baseUrl: string;
   private session: Soup.Session;
   private decoder: TextDecoder;
+  private cache: CacheManager;
 
   constructor(baseUrl?: string) {
     // Default to emulator, can be overridden for production
-    this.baseUrl = baseUrl || 'http://127.0.0.1:5001/demo-colosseum/us-central1';
+    this.baseUrl = baseUrl || 'http://127.0.0.1:5001/demo-arena/us-central1';
     this.session = new Soup.Session();
     this.decoder = new TextDecoder();
+    
+    // Initialize cache with API cache directory
+    const cacheDir = GLib.build_filenamev([GLib.get_user_cache_dir(), 'arena-extension']);
+    this.cache = new CacheManager('org.gnome.shell.extensions.arena', cacheDir);
   }
 
   /**
@@ -125,60 +142,132 @@ export class FirebaseBackendClient {
    * Get list of available countries
    */
   async getCountries(): Promise<Country[]> {
+    const cacheKey = 'countries';
+    const cached = this.cache.get<Country[]>(cacheKey, CacheType.API, CACHE_TTL.COUNTRIES);
+    if (cached) {
+      return cached;
+    }
+
     const response = await this.request<{ categories: Country[] }>('/getCountries');
-    return response?.categories || [];
+    const countries = response?.categories || [];
+    
+    if (countries.length > 0) {
+      this.cache.set(cacheKey, countries, CacheType.API);
+    }
+    
+    return countries;
   }
 
   /**
    * Get competitions for a specific country
    */
   async getCompetitionsForCountry(country: string): Promise<Competition[]> {
+    const cacheKey = `competitions-country-${country}`;
+    const cached = this.cache.get<Competition[]>(cacheKey, CacheType.API, CACHE_TTL.COMPETITIONS);
+    if (cached) {
+      return cached;
+    }
+
     const response = await this.request<{ competitions: Competition[] }>(
       '/getCompetitions',
       { country }
     );
-    return response?.competitions || [];
+    const competitions = response?.competitions || [];
+    
+    if (competitions.length > 0) {
+      this.cache.set(cacheKey, competitions, CacheType.API);
+    }
+    
+    return competitions;
   }
 
   /**
    * Get all competitions
    */
   async getCompetitions(): Promise<Competition[]> {
+    const cacheKey = 'competitions-all';
+    const cached = this.cache.get<Competition[]>(cacheKey, CacheType.API, CACHE_TTL.COMPETITIONS);
+    if (cached) {
+      return cached;
+    }
+
     const response = await this.request<{ competitions: Competition[] }>('/getCompetitions');
-    return response?.competitions || [];
+    const competitions = response?.competitions || [];
+    
+    if (competitions.length > 0) {
+      this.cache.set(cacheKey, competitions, CacheType.API);
+    }
+    
+    return competitions;
   }
 
   /**
    * Get seasons for a competition
    */
   async getSeasons(competitionId: string): Promise<Season[]> {
+    const cacheKey = `seasons-${competitionId}`;
+    const cached = this.cache.get<Season[]>(cacheKey, CacheType.API, CACHE_TTL.SEASONS);
+    if (cached) {
+      return cached;
+    }
+
     const response = await this.request<{ seasons: Season[] }>(
       '/getSeasons',
       { competitionId }
     );
-    return response?.seasons || [];
+    const seasons = response?.seasons || [];
+    
+    if (seasons.length > 0) {
+      this.cache.set(cacheKey, seasons, CacheType.API);
+    }
+    
+    return seasons;
   }
 
   /**
    * Get competitors for a season
    */
   async getCompetitors(competitionId: string, seasonId: string): Promise<Competitor[]> {
+    const cacheKey = `competitors-${competitionId}-${seasonId}`;
+    const cached = this.cache.get<Competitor[]>(cacheKey, CacheType.API, CACHE_TTL.COMPETITORS);
+    if (cached) {
+      return cached;
+    }
+
     const response = await this.request<{ competitors: Competitor[] }>(
       '/getCompetitors',
       { competitionId, seasonId }
     );
-    return response?.competitors || [];
+    const competitors = response?.competitors || [];
+    
+    if (competitors.length > 0) {
+      this.cache.set(cacheKey, competitors, CacheType.API);
+    }
+    
+    return competitors;
   }
 
   /**
    * Get schedules for a competitor
    */
   async getSchedules(competitorId: string): Promise<SportEventBasic[]> {
+    const cacheKey = `schedules-${competitorId}`;
+    const cached = this.cache.get<SportEventBasic[]>(cacheKey, CacheType.API, CACHE_TTL.SCHEDULES);
+    if (cached) {
+      return cached;
+    }
+
     const response = await this.request<{ schedules: SportEventBasic[] }>(
       '/getSchedules',
       { competitorId }
     );
-    return response?.schedules || [];
+    const schedules = response?.schedules || [];
+    
+    if (schedules.length > 0) {
+      this.cache.set(cacheKey, schedules, CacheType.API);
+    }
+    
+    return schedules;
   }
 
   /**
@@ -193,8 +282,38 @@ export class FirebaseBackendClient {
    * Get live score for an event
    */
   async getLiveScore(eventId: string): Promise<LiveScore | null> {
-    const response = await this.request<{ live: LiveScore }>('/getLiveScore', { eventId });
-    return response?.live || null;
+    const cacheKey = `live-score-${eventId}`;
+    const cached = this.cache.get<LiveScore>(cacheKey, CacheType.API, CACHE_TTL.LIVE_SCORE);
+    if (cached) {
+      return cached;
+    }
+
+    const response = await this.request<{ live: { sport_event_status?: { home_score?: number; away_score?: number; match_status?: string; status?: string } } }>('/getLiveScore', { eventId });
+    
+    if (!response?.live?.sport_event_status) {
+      return null;
+    }
+
+    const status = response.live.sport_event_status;
+    const liveScore: LiveScore = {
+      eventId,
+      homeScore: status.home_score,
+      awayScore: status.away_score,
+      status: status.match_status || status.status || '',
+      period: '',
+      matchTime: ''
+    };
+    
+    this.cache.set(cacheKey, liveScore, CacheType.API);
+    return liveScore;
+  }
+
+  /**
+   * Clear all cached data
+   */
+  clearCache(): void {
+    this.cache.clearAll(CacheType.API);
+    logInfo('Firebase backend cache cleared', 'FirebaseBackendClient');
   }
 
   /**
@@ -219,6 +338,7 @@ export class FirebaseBackendClient {
     if (this.session) {
       (this.session as { abort: () => void }).abort();
     }
+    this.cache.destroy();
   }
 }
 

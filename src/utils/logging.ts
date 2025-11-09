@@ -4,14 +4,14 @@
  */
 
 /**
- * Centralized logging and error handling utilities for the Colosseum extension.
+ * Centralized logging and error handling utilities for the Arena extension.
  *
  * This module provides a unified logging system that works across different
  * environments (GNOME Shell runtime, test environment, preferences UI).
  * It handles logger injection for testing, provides consistent message
  * formatting, and includes validation utilities.
  *
- * The logging functions automatically prefix messages with '[Colosseum]'
+ * The logging functions automatically prefix messages with '[Arena]'
  * for easy identification in GNOME Shell logs and support different log
  * levels (error, warn, info, debug) with appropriate formatting.
  *
@@ -66,7 +66,7 @@ const gjsLogger: Logger = {
 let currentLogger: Logger = gjsLogger;
 
 // Log file directory
-const LOG_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-extension', 'logs']);
+const LOG_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'arena-extension', 'logs']);
 
 /**
  * Set the logger instance for testing or alternative environments.
@@ -95,7 +95,7 @@ export function setLogger(logger: Logger) {
  * Internal function for logging messages with consistent formatting.
  *
  * Handles message formatting, level-specific output, and error object
- * processing. Automatically prefixes all messages with '[Colosseum]'
+ * processing. Automatically prefixes all messages with '[Arena]'
  * for easy identification in logs.
  *
  * @param message - Error object, string, or other value to log
@@ -109,7 +109,7 @@ function logMessage(
   context?: string,
   level: string = "error",
 ) {
-  const prefix = '[Colosseum]';
+  const prefix = '[Arena]';
   let formattedMessage;
 
   if (message instanceof Error) {
@@ -149,7 +149,7 @@ function logMessage(
  *   logErr(error, 'Color parsing');
  * }
  *
- * // Output: [Colosseum] Color parsing: Invalid color format '#gggggg'
+ * // Output: [Arena] Color parsing: Invalid color format '#gggggg'
  * ```
  */
 export function logErr(error: unknown, context?: string) {
@@ -272,7 +272,7 @@ export function logFile(message: string, filename: string = 'api_calls.log') {
   } catch (e) {
     // Avoid calling logInfo here to prevent recursion (logInfo -> logToFile -> error)
     try {
-      currentLogger.log(`[Colosseum] logFile: Failed to log message ${message} - ${e}`);
+      currentLogger.log(`[Arena] logFile: Failed to log message ${message} - ${e}`);
     } catch {
       // Swallow to avoid recursive logging
     }
@@ -354,7 +354,7 @@ function logToFile(message: string, level: string) {
   } catch (e) {
     // Avoid calling logInfo here to prevent recursion (logInfo -> logToFile -> error)
     try {
-      currentLogger.log(`[Colosseum] logToFile: Failed to log message at level ${level}. ${e}`);
+      currentLogger.log(`[Arena] logToFile: Failed to log message at level ${level}. ${e}`);
     } catch {
       // Swallow to avoid recursive logging
     }

@@ -136,7 +136,7 @@ export const ArenaPanelMenu = GObject.registerClass(
      * 
      * @returns Array of menu items
      */
-    private _createMenu(): PopupMenu.PopupBaseMenuItem[] {
+    private async _createMenu(): Promise<PopupMenu.PopupBaseMenuItem[]> {
       const menus: PopupMenu.PopupBaseMenuItem[] = [];
 
       this._addConfigureTeamsMenuItem(menus);
@@ -154,7 +154,7 @@ export const ArenaPanelMenu = GObject.registerClass(
       }
 
       allGames.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-      this._addGamesList(menus, allGames);
+      await this._addGamesList(menus, allGames);
 
       return menus;
     }
@@ -318,7 +318,148 @@ export const ArenaPanelMenu = GObject.registerClass(
     /**
      * Adds the flattened chronological games list to the menu
      */
-    private _addGamesList(
+    private async _addGamesList(
+      menus: PopupMenu.PopupBaseMenuItem[],
+      allGames: ExtendedGame[]
+    ): Promise<void> {
+      // First, update live scores for games that might be live
+      const potentiallyLive = allGames.filter(g => g.live || (!g.isComplete && g.timestamp && g.timestamp <= Date.now()));
+      await this._updateLiveScores(potentiallyLive);
+
+      // Recategorize games after updating scores
+      const liveGames = allGames.filter(g => g.live && !g.isComplete);
+      const completedToday = allGames.filter(g => g.isComplete && g.timestamp && g.timestamp >= this._getStartOfToday());
+      const upcomingGames = allGames.filter(g => !g.live && !g.isComplete);
+
+      // Add Live Games section
+      if (liveGames.length > 0) {
+        this._addGamesSection(menus, liveGames, "Live Games");
+      }
+
+      // Add Completed Today section
+      if (completedToday.length > 0) {
+        this._addGamesSection(menus, completedToday, "Completed Today");
+      }
+
+      // Add Upcoming Games section
+      if (upcomingGames.length > 0) {
+        this._addGamesSection(menus, upcomingGames, "Upcoming Games");
+      }
+    }
+
+    /**
+     * Gets start of today timestamp (midnight)
+     */
+    private _getStartOfToday(): number {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return today.getTime();
+    }
+
+    /**
+     * Adds a section of games with a header
+     */
+    private _addGamesSection(
+      menus: PopupMenu.PopupBaseMenuItem[],
+      games: ExtendedGame[],
+      sectionTitle: string
+    ): void {
+      const groupBox = new St.BoxLayout({
+        style_class: "scoreboard",
+        vertical: true,
+        can_focus: false,
+        track_hover: false,
+        reactive: false,
+      });
+
+      const accentColor = getAccentColor();
+      let currentDay: string | null = null;
+
+      for (const game of games) {
+        const day = new Date(game.timestamp!).toDateString();
+
+        if (currentDay !== day) {
+          this._addDateHeader(groupBox, game.timestamp!);
+          currentDay = day;
+        }
+
+        this._addGameRows(groupBox, game, accentColor);
+      }
+
+      const baseMenuItem = this._createBaseMenuItem();
+      const scrollView = new St.ScrollView({
+        width: 295,
+        hscrollbar_policy: St.PolicyType.NEVER,
+        vscrollbar_policy: St.PolicyType.AUTOMATIC,
+        enable_mouse_scrolling: true,
+        y_expand: true,
+      });
+
+      scrollView.add_child(groupBox);
+      baseMenuItem.add_child(scrollView);
+
+      // Add section header
+      const submenu = new PopupMenu.PopupSubMenuMenuItem(sectionTitle);
+      this._disableHoverTracking(submenu);
+      submenu.add_style_class_name("scoreBoardPanel");
+      submenu.connect("activate", () => {
+        const isOpen = (submenu as { menu?: { isOpen?: boolean } }).menu?.isOpen || false;
+        submenu.setSubmenuShown(!isOpen);
+        return true;
+      });
+
+      submenu.menu.addMenuItem(baseMenuItem);
+      menus.push(submenu);
+    }
+
+    /**
+     * Updates live scores for games in progress
+     */
+    private async _updateLiveScores(liveGames: ExtendedGame[]): Promise<void> {
+      for (const game of liveGames) {
+        if (!game.eventId) continue;
+        
+        try {
+          const liveScore = await this._client.getLiveScore(game.eventId);
+          if (liveScore) {
+            // Update scores
+            if (liveScore.homeScore !== undefined) {
+              game.home.score = String(liveScore.homeScore);
+            }
+            if (liveScore.awayScore !== undefined) {
+              game.away.score = String(liveScore.awayScore);
+            }
+            
+            // Update status - check if game is actually complete
+            if (liveScore.status === 'ended' || liveScore.status === 'closed') {
+              game.isComplete = true;
+              game.live = false;
+              game.meta = 'FT'; // Full Time
+            } else if (liveScore.status) {
+              game.meta = liveScore.status;
+            }
+            
+            // Determine winner/loser
+            if (game.isComplete && liveScore.homeScore !== undefined && liveScore.awayScore !== undefined) {
+              if (liveScore.homeScore > liveScore.awayScore) {
+                game.home.isWinner = true;
+                game.away.isLoser = true;
+              } else if (liveScore.awayScore > liveScore.homeScore) {
+                game.away.isWinner = true;
+                game.home.isLoser = true;
+              }
+            }
+          }
+        } catch (e) {
+          logErr(e, `Failed to fetch live score for event ${game.eventId}`);
+        }
+      }
+    }
+
+    /**
+     * Adds the flattened chronological games list to the menu (OLD VERSION - REPLACED ABOVE)
+     */
+    private _addGamesListOld(
       menus: PopupMenu.PopupBaseMenuItem[],
       allGames: ExtendedGame[]
     ): void {
@@ -552,7 +693,7 @@ export const ArenaPanelMenu = GObject.registerClass(
      */
     async _update(): Promise<void> {
       await this._loadData();
-      const menus = this._createMenu();
+      const menus = await this._createMenu();
       const menuHolder = this.menu as { removeAll?: () => void; addMenuItem?: (m: PopupMenu.PopupBaseMenuItem) => void };
       menuHolder.removeAll?.();
       for (const menu of menus) {

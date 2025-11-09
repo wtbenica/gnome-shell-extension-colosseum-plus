@@ -30,6 +30,7 @@ export interface Game {
   isComplete: boolean;
   league?: string;
   competition?: string;
+  eventId?: string;
 }
 
 /**

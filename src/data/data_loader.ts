@@ -42,7 +42,7 @@ class DataLoaderClass {
 
   constructor() {
     // Use emulator during development, switch to production URL later
-    this.backendClient = new FirebaseBackendClient('http://127.0.0.1:5001/demo-colosseum/us-central1');
+    this.backendClient = new FirebaseBackendClient('http://127.0.0.1:5001/demo-arena/us-central1');
   }
 
   /**
@@ -124,6 +124,21 @@ class DataLoaderClass {
   }
 
   /**
+   * Fetches live score for a specific event
+   * 
+   * @param eventId - The sport event ID
+   * @returns Promise resolving to live score data or null
+   */
+  async fetchLiveScore(eventId: string): Promise<{ homeScore?: number; awayScore?: number; status?: string } | null> {
+    try {
+      return await this.backendClient.getLiveScore(eventId);
+    } catch (e) {
+      logErr(e, `Error fetching live score for event ${eventId}`);
+      return null;
+    }
+  }
+
+  /**
    * Converts raw schedule data to game events
    * 
    * @param schedules - Raw schedule data from API
@@ -138,9 +153,17 @@ class DataLoaderClass {
     const seen = new Set<string>();
     const now = Date.now();
     const limitTs = now + daysAhead * 24 * 60 * 60 * 1000;
+    
+    // Calculate start of today (midnight in local timezone)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startOfToday = today.getTime();
+    
+    // Include games from start of today onwards
+    const minTs = startOfToday;
 
     for (const item of schedules) {
-      const game = this._parseScheduleItem(item, now, limitTs, seen);
+      const game = this._parseScheduleItem(item, minTs, limitTs, seen, now);
       if (game) {
         events.push(game);
       }
@@ -154,16 +177,18 @@ class DataLoaderClass {
    * Parses a single schedule item into a game event
    * 
    * @param item - Raw schedule item
-   * @param now - Current timestamp
+   * @param minTs - Minimum timestamp to include (start of today)
    * @param limitTs - Maximum timestamp to include
    * @param seen - Set of seen event IDs for deduplication
+   * @param now - Current timestamp for determining live status
    * @returns Game event or null if invalid
    */
   private _parseScheduleItem(
     item: SportEvent,
-    now: number,
+    minTs: number,
     limitTs: number,
-    seen: Set<string>
+    seen: Set<string>,
+    now: number
   ): Game | null {
     const se = this._normalizeSportEvent(item);
     const evId = this._getEventId(se);
@@ -174,7 +199,7 @@ class DataLoaderClass {
     seen.add(evId);
 
     const ts = this._parseEventTimestamp(se);
-    if (!ts || ts < now || ts > limitTs) {
+    if (!ts || ts < minTs || ts > limitTs) {
       return null;
     }
 
@@ -193,6 +218,12 @@ class DataLoaderClass {
     homeTeam.league = (item as { home?: { league?: string } }).home?.league;
     awayTeam.league = (item as { away?: { league?: string } }).away?.league;
 
+    // Determine if game is live or complete
+    // Typical soccer game is ~2 hours, allow up to 3 hours for extra time
+    const gameEndEstimate = ts + (3 * 60 * 60 * 1000); // 3 hours after start
+    const isLive = ts <= now && now < gameEndEstimate;
+    const isComplete = now >= gameEndEstimate;
+
     return {
       home: homeTeam,
       away: awayTeam,
@@ -202,10 +233,11 @@ class DataLoaderClass {
       }),
       timestamp: ts,
       link: null,
-      live: false,
-      isComplete: false,
+      live: isLive,
+      isComplete: isComplete,
       league: (item as { league?: string }).league,
       competition: (item as { competition?: string }).competition,
+      eventId: evId,
     };
   }
 

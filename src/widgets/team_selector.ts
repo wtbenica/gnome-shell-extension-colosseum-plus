@@ -269,12 +269,24 @@ export const TeamSelectorDialog = GObject.registerClass(
           return;
         }
 
-        // Sort teams by name
-        teams.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
         // Get followed teams
         const followed = this._settings.get_strv('followed-teams');
         this._followedCache = new Set(followed);
+
+        // Sort teams: followed teams first, then alphabetically
+        teams.sort((a, b) => {
+          const aId = String(a.id);
+          const bId = String(b.id);
+          const aFollowed = this._followedCache.has(aId);
+          const bFollowed = this._followedCache.has(bId);
+
+          // Followed teams first
+          if (aFollowed && !bFollowed) return -1;
+          if (!aFollowed && bFollowed) return 1;
+          
+          // Then alphabetically
+          return (a.name || '').localeCompare(b.name || '');
+        });
 
         // Get accent color
         let accentColor = '#ffd966';
