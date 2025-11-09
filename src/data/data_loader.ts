@@ -1,44 +1,11 @@
-import GLib from 'gi://GLib';
-
-import { SportradarClient } from "../api/sportradar_api_client.js";
-import { CACHE, TIMING } from "../config/constants.js";
-import { loadEnv } from "../config/env_loader.js";
+import { FirebaseBackendClient } from "../api/firebase_backend_client.js";
+import type { Country } from "../api/firebase_backend_client.js";
+import { TIMING } from "../config/constants.js";
 import { logErr } from "../utils/logging.js";
 import { Game, Team } from "../widgets/scoreboard_view.js";
-import { CacheManager, CacheType } from "./cache.js";
 
 import type { Competition, Competitor, SportEventBasic } from "../api/types.js";
-import type { ColosseumConstants, Env } from "../config/types.js";
-
-const env = loadEnv() as Env;
-const SPORT_RADAR_KEY = env.SPORT_RADAR_KEY || "";
-const SCHEMA_ID = "org.gnome.shell.extensions.colosseum";
-const API_CACHE_PATH = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-api']);
-
-/**
- * Target leagues configuration
- */
-interface TargetLeague {
-  id: string;
-  category: string;
-}
-
-// `Competition` and `Competitor` are re-exported from the API schemas above.
-
-/**
- * Sport event from API - extends SportEventBasic with additional wrapper possibilities
- */
-type SportEvent = SportEventBasic | { sport_event?: SportEventBasic };
-
-/**
- * Target leagues mapping
- */
-const TARGET_LEAGUES: Record<string, TargetLeague> = {
-  "Premier League": { id: "sr:competition:17", category: "England" },
-  LaLiga: { id: "sr:competition:8", category: "Spain" },
-  MLS: { id: "sr:competition:242", category: "USA" },
-  "Liga MX": { id: "sr:competition:27464", category: "Mexico" },
-};
+import type { ArenaConstants } from "../config/types.js";
 
 /**
  * Normalizes competitor ID from various possible field names
@@ -46,6 +13,11 @@ const TARGET_LEAGUES: Record<string, TargetLeague> = {
 function normalizeCompetitorId(competitor: Competitor): string {
   return String(competitor.id || competitor._id || competitor.uid || competitor.urn || '');
 }
+
+/**
+ * Sport event from API - extends SportEventBasic with additional wrapper possibilities
+ */
+type SportEvent = SportEventBasic | { sport_event?: SportEventBasic };
 
 /**
  * Tournament preferences mapping
@@ -63,127 +35,46 @@ const PREF_TOURNAMENTS: Record<string, string> = {
 };
 
 /**
- * Local data cache structure
- */
-interface LocalDataCache {
-  lastUpdate: number;
-  leagues: Record<string, unknown>;
-  teams: Record<string, Competitor[]>;
-  rawCompetitions: Competition[];
-}
-
-/**
  * Manages data loading, caching, and API interactions for sports data
  */
 class DataLoaderClass {
-  private cacheManager: CacheManager;
-  private sportradarClient: SportradarClient;
+  private backendClient: FirebaseBackendClient;
 
   constructor() {
-    this.cacheManager = new CacheManager(SCHEMA_ID, API_CACHE_PATH);
-    this.sportradarClient = new SportradarClient(SPORT_RADAR_KEY);
+    // Use emulator during development, switch to production URL later
+    this.backendClient = new FirebaseBackendClient('http://127.0.0.1:5001/demo-colosseum/us-central1');
   }
 
   /**
-   * Fetches competitions, preferring cached data when available
+   * Fetches available countries
    * 
-   * @returns Promise resolving to array of competitions
+   * @returns Promise resolving to array of countries
    */
-  async fetchCompetitions(): Promise<Competition[]> {
-    const cachedData = this.cacheManager.get<LocalDataCache>(
-      'data',
-      CacheType.LOCAL,
-      CACHE.API_MAX_AGE
-    );
-
-    if (cachedData?.rawCompetitions && cachedData.rawCompetitions.length > 0) {
-      return this._synthesizeCompetitionsFromCache(cachedData.rawCompetitions);
-    }
-
-    return await this._fetchCompetitionsFromAPI();
-  }
-
-  /**
-   * Synthesizes competition list from cache with placeholders for missing entries
-   * 
-   * @param cachedCompetitions - Cached competitions array
-   * @returns Array of competitions with placeholders
-   */
-  private _synthesizeCompetitionsFromCache(
-    cachedCompetitions: Competition[]
-  ): Competition[] {
-    const cacheById = new Map(cachedCompetitions.map((c) => [c.id, c]));
-    const result: Competition[] = [];
-
-    for (const [name, details] of Object.entries(TARGET_LEAGUES)) {
-      if (cacheById.has(details.id)) {
-        result.push(cacheById.get(details.id)!);
-      } else {
-        result.push({
-          id: details.id,
-          name: name,
-          category: details.category,
-          _placeholder: true,
-        });
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * Fetches competitions from API and updates cache
-   * 
-   * @returns Promise resolving to filtered competitions array
-   */
-  private async _fetchCompetitionsFromAPI(): Promise<Competition[]> {
-  const competitions = await this.sportradarClient.getCompetitions();
-
-    if (competitions.length === 0) {
+  async fetchCountries(): Promise<Country[]> {
+    try {
+      return await this.backendClient.getCountries();
+    } catch (e) {
+      logErr(e, 'Error fetching countries');
       return [];
     }
-
-    const filteredCompetitions = this._filterTargetCompetitions(competitions);
-    this._updateCompetitionsCache(filteredCompetitions);
-
-    return filteredCompetitions;
   }
 
   /**
-   * Filters competitions to only include target leagues
+   * Fetches competitions, optionally filtered by country
    * 
-   * @param competitions - All competitions from API
-   * @returns Filtered array of target competitions
+   * @param countryCode - Optional country code to filter by
+   * @returns Promise resolving to array of competitions
    */
-  private _filterTargetCompetitions(
-    competitions: Competition[]
-  ): Competition[] {
-    const targetIds = new Set(
-      Object.values(TARGET_LEAGUES).map((league) => league.id)
-    );
-    return competitions.filter((comp) => targetIds.has(comp.id));
-  }
-
-  /**
-   * Updates cache with new competitions data
-   * 
-   * @param competitions - Competitions to cache
-   */
-  private _updateCompetitionsCache(competitions: Competition[]): void {
-    const cachedData = this.cacheManager.get<LocalDataCache>(
-      'data',
-      CacheType.LOCAL,
-      CACHE.API_MAX_AGE
-    );
-
-    const updatedData: LocalDataCache = {
-      lastUpdate: Date.now(),
-      leagues: cachedData?.leagues || {},
-      teams: cachedData?.teams || {},
-      rawCompetitions: competitions,
-    };
-
-    this.cacheManager.set('data', updatedData, CacheType.LOCAL);
+  async fetchCompetitions(countryCode?: string): Promise<Competition[]> {
+    try {
+      if (countryCode) {
+        return await this.backendClient.getCompetitionsForCountry(countryCode);
+      }
+      return await this.backendClient.getCompetitions();
+    } catch (e) {
+      logErr(e, `Error fetching competitions${countryCode ? ` for ${countryCode}` : ''}`);
+      return [];
+    }
   }
 
   /**
@@ -193,76 +84,23 @@ class DataLoaderClass {
    * @returns Promise resolving to array of teams/competitors
    */
   async fetchCompetitionInfo(competitionId: string): Promise<Competitor[]> {
-    const cachedData = this.cacheManager.get<LocalDataCache>(
-      'data',
-      CacheType.LOCAL,
-      CACHE.API_MAX_AGE
-    );
+    try {
+      // Get seasons for the competition
+      const seasons = await this.backendClient.getSeasons(competitionId);
+      if (!seasons || seasons.length === 0) {
+        return [];
+      }
 
-    const cachedTeams = cachedData?.teams?.[competitionId];
-    if (cachedTeams && cachedTeams.length > 0) {
-      // Ensure IDs are strings (normalize older shapes)
-      return cachedTeams.map((t) => ({ ...t, id: normalizeCompetitorId(t) }));
-    }
-
-    return await this._fetchCompetitionInfoFromAPI(competitionId);
-  }
-
-  /**
-   * Fetches competition info from API and updates cache
-   * 
-   * @param competitionId - The competition ID
-   * @returns Promise resolving to array of teams
-   */
-  private async _fetchCompetitionInfoFromAPI(
-    competitionId: string
-  ): Promise<Competitor[]> {
-    const competitionInfo = await this.sportradarClient.getCompetitionInfo(competitionId);
-
-    if (
-      !competitionInfo?.season?.competitors ||
-      competitionInfo.season.competitors.length === 0
-    ) {
+      // Use the most recent season (last in the array)
+      const season = seasons[seasons.length - 1];
+      
+      // Get competitors for that season
+      const competitors = await this.backendClient.getCompetitors(competitionId, season.id);
+      return competitors.map((c) => ({ ...c, id: normalizeCompetitorId(c) }));
+    } catch (e) {
+      logErr(e, `Error fetching competition info for ${competitionId}`);
       return [];
     }
-
-    const teams = competitionInfo.season.competitors;
-    // Normalize team IDs to strings before caching/returning
-    const normalizedTeams: Competitor[] = teams.map((t) => ({
-      ...t,
-      id: normalizeCompetitorId(t),
-    }));
-
-    this._updateTeamsCache(competitionId, normalizedTeams);
-
-    return normalizedTeams;
-  }
-
-  /**
-   * Updates cache with team data for a competition
-   * 
-   * @param competitionId - The competition ID
-   * @param teams - Array of teams to cache
-   */
-  private _updateTeamsCache(
-    competitionId: string,
-    teams: Competitor[]
-  ): void {
-    const cachedData = this.cacheManager.get<LocalDataCache>(
-      'data',
-      CacheType.LOCAL,
-      CACHE.API_MAX_AGE
-    );
-
-    const updatedTeams = { ...(cachedData?.teams || {}), [competitionId]: teams };
-    const updatedData: LocalDataCache = {
-      lastUpdate: Date.now(),
-      leagues: cachedData?.leagues || {},
-      teams: updatedTeams,
-      rawCompetitions: cachedData?.rawCompetitions || [],
-    };
-
-    this.cacheManager.set('data', updatedData, CacheType.LOCAL);
   }
 
   /**
@@ -277,9 +115,7 @@ class DataLoaderClass {
     daysAhead: number = TIMING.DAYS_AHEAD
   ): Promise<Game[]> {
     try {
-      const schedules =
-        (await this.sportradarClient.getCompetitorSchedules(competitorId)) ||
-          [];
+      const schedules = await this.backendClient.getSchedules(competitorId);
       return this._convertSchedulesToGames(schedules, daysAhead);
     } catch (e) {
       logErr(e, `Error fetching schedules for competitor ${competitorId}`);
@@ -475,9 +311,9 @@ class DataLoaderClass {
   /**
    * Generates dynamic constants for preferences based on available competitions
    * 
-   * @returns Promise resolving to Colosseum constants configuration
+   * @returns Promise resolving to Arena constants configuration
    */
-  async getDynamicConstants(): Promise<ColosseumConstants> {
+  async getDynamicConstants(): Promise<ArenaConstants> {
     const competitions = await this.fetchCompetitions();
 
     const PREF_LEAGUES: Record<string, string> = {};

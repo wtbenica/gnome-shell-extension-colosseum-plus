@@ -4,27 +4,27 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { getConstants } from "./config/const.js";
 import DataLoader from "./data/data_loader.js";
 import { logErr } from "./utils/logging.js";
-import { ColosseumPanelMenu } from "./widgets/panel_menu.js";
+import { ArenaPanelMenu } from "./widgets/panel_menu.js";
 
-import type { ColosseumConstants } from "./config/types.js";
+import type { ArenaConstants } from "./config/types.js";
 
-export default class ColosseumExtension extends Extension {
-  panelMenu: InstanceType<typeof ColosseumPanelMenu> | null = null;
+export default class ArenaExtension extends Extension {
+  panelMenu: InstanceType<typeof ArenaPanelMenu> | null = null;
 
   async enable(): Promise<void> {
     // Check if we should update data (only on Mondays if cache is stale)
     try {
       await this.checkForDataUpdates();
     } catch (error) {
-      logErr(error, 'Colosseum extension: Failed to check data updates');
+      logErr(error, 'Arena extension: Failed to check data updates');
     }
 
     // Load dynamic constants first
-    let constants: ColosseumConstants;
+    let constants: ArenaConstants;
     try {
       constants = await getConstants();
     } catch (error) {
-      logErr(error, 'Colosseum extension: Failed to load dynamic constants');
+      logErr(error, 'Arena extension: Failed to load dynamic constants');
       // Create fallback with minimal required fields
       constants = {
         PREF_UPDATE_FREQ: "update-frequency",
@@ -40,18 +40,18 @@ export default class ColosseumExtension extends Extension {
     }
 
     // PanelMenu.Button-derived class expects constructor args for alignment and label
-    this.panelMenu = new ColosseumPanelMenu(0.0, "colosseum", false);
+    this.panelMenu = new ArenaPanelMenu(0.0, "arena", false);
     this.panelMenu.setSettings(
-      this.getSettings("org.gnome.shell.extensions.colosseum"),
+      this.getSettings("org.gnome.shell.extensions.arena"),
       constants
     );
     this.panelMenu._update().then(() => {
     }).catch((error: unknown) => {
-      logErr(error, 'Colosseum extension: Failed to update panel menu');
+      logErr(error, 'Arena extension: Failed to update panel menu');
     });
 
     Main.panel.addToStatusArea(
-      "colosseum",
+      "arena",
       this.panelMenu,
       1,
       "right",

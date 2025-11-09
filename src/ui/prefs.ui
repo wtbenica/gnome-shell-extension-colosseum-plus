@@ -12,6 +12,17 @@
     <property name="icon_name">applications-system-symbolic</property>
     <child>
       <object class="AdwPreferencesGroup">
+        <property name="title" translatable="true">Team Selection</property>
+        <child>
+          <object class="AdwComboRow" id="prefs_country_selector">
+            <property name="title" translatable="true">Country</property>
+            <property name="subtitle" translatable="true">Select a country to filter available competitions</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="AdwPreferencesGroup">
         <property name="title" translatable="true">Display Options</property>
         <child>
           <object class="AdwActionRow" id="prefs_label_followed_only">

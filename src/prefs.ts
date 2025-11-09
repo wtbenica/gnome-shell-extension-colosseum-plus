@@ -2,8 +2,11 @@ import { ExtensionPreferences } from "resource:///org/gnome/Shell/Extensions/js/
 
 import Gio from "gi://Gio";
 import Gtk from "gi://Gtk";
+import Adw from "gi://Adw";
 
-import { PREF_UPDATE_FREQ, PREF_FOLLOWED_ONLY, PREF_COMPACT_MODE, PREF_SHOW_NEXT_GAMES, PREF_POSITION_TOPBAR } from "./config/const.js";
+import { PREF_UPDATE_FREQ, PREF_FOLLOWED_ONLY, PREF_COMPACT_MODE, PREF_SHOW_NEXT_GAMES, PREF_POSITION_TOPBAR, PREF_SELECTED_COUNTRY } from "./config/const.js";
+import DataLoader from "./data/data_loader.js";
+import { logErr } from "./utils/logging.js";
 
 const EXT_PATH = import.meta.url;
 
@@ -31,6 +34,9 @@ class Preferences {
   }
 
   _bootstrap(): void {
+    // Populate country selector
+    this._populateCountrySelector();
+
     // Bind basic settings
     this._settings.bind(
       PREF_UPDATE_FREQ,
@@ -63,14 +69,75 @@ class Preferences {
       Gio.SettingsBindFlags.DEFAULT,
     );
   }
+
+  async _populateCountrySelector(): Promise<void> {
+    const countryRow = this._builder.get_object("prefs_country_selector") as Adw.ComboRow;
+    
+    try {
+      // Create string list model for countries
+      const stringList = new Gtk.StringList();
+      
+      // Add "All Countries" option
+      stringList.append("All Countries");
+      
+      // Fetch countries from backend
+      const countries = await DataLoader.fetchCountries();
+      
+      // Add each country
+      for (const country of countries) {
+        stringList.append(`${country.name} (${country.competitionCount || 0})`);
+      }
+      
+      countryRow.set_model(stringList);
+      
+      // Get current selected country from settings
+      const selectedCountry = this._settings.get_string(PREF_SELECTED_COUNTRY);
+      
+      // Find and set the selected index
+      if (selectedCountry) {
+        const selectedCountryObj = countries.find(c => c.id === selectedCountry);
+        if (selectedCountryObj) {
+          const index = countries.indexOf(selectedCountryObj) + 1; // +1 for "All Countries"
+          countryRow.set_selected(index);
+        } else {
+          countryRow.set_selected(0); // "All Countries"
+        }
+      } else {
+        countryRow.set_selected(0); // "All Countries"
+      }
+      
+      // Handle country selection changes
+      countryRow.connect('notify::selected', () => {
+        const selected = countryRow.get_selected();
+        if (selected === 0) {
+          // "All Countries" selected
+          this._settings.set_string(PREF_SELECTED_COUNTRY, '');
+        } else {
+          // Specific country selected (subtract 1 for "All Countries" offset)
+          const country = countries[selected - 1];
+          if (country) {
+            this._settings.set_string(PREF_SELECTED_COUNTRY, country.id);
+          }
+        }
+      });
+      
+    } catch (error) {
+      logErr(error, 'Failed to populate country selector');
+      // Show error in UI
+      const stringList = new Gtk.StringList();
+      stringList.append("Error loading countries");
+      countryRow.set_model(stringList);
+      countryRow.set_selected(0);
+    }
+  }
 }
 
-export default class ColosseumPreferences extends ExtensionPreferences {
+export default class ArenaPreferences extends ExtensionPreferences {
   async fillPreferencesWindow(window: PreferencesWindow): Promise<void> {
     // Preferences constructor performs synchronous UI setup
     new Preferences(
       window,
-      this.getSettings("org.gnome.shell.extensions.colosseum"),
+      this.getSettings("org.gnome.shell.extensions.arena"),
     );
   }
 }

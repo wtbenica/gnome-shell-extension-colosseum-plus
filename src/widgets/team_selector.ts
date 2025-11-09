@@ -8,30 +8,65 @@ import * as ModalDialog from "resource:///org/gnome/shell/ui/modalDialog.js";
 import { logErr } from "../utils/logging.js";
 import DataLoader from "../data/data_loader.js";
 import type { Competition, Competitor } from "../api/types.js";
+import type { Country } from "../api/firebase_backend_client.js";
 
-type CompetitionWithPlaceholder = Competition & { _placeholder?: boolean };
 type CompetitorWithLeague = Competitor & { leagueName?: string };
+
+/**
+ * Selection view state
+ */
+enum ViewState {
+  COUNTRIES,
+  COMPETITIONS,
+  TEAMS
+}
 
 export const TeamSelectorDialog = GObject.registerClass(
   class TeamSelectorDialog extends ModalDialog.ModalDialog {
     private _settings: Gio.Settings;
     private _contentBox: St.BoxLayout;
-  private _batchIndex!: number;
-  private _allTeams!: CompetitorWithLeague[];
-  private _followedCache!: Set<string>;
-  private _currentLeague!: string | null;
+    private _titleLabel: St.Label;
+    private _backButton: St.Button | null = null;
+    private _viewState: ViewState = ViewState.COUNTRIES;
+    private _selectedCountry: Country | null = null;
+    private _selectedCompetition: Competition | null = null;
+    private _batchIndex!: number;
+    private _allTeams!: CompetitorWithLeague[];
+    private _followedCache!: Set<string>;
 
     constructor(settings: Gio.Settings) {
       super({ styleClass: 'team-selector-dialog' });
 
       this._settings = settings;
 
-      // Dialog title
-      let titleLabel = new St.Label({
-        text: 'Select Teams to Follow',
-        style_class: 'team-selector-title',
+      // Title bar with back button
+      const titleBox = new St.BoxLayout({ 
+        style_class: 'team-selector-title-box',
+        x_expand: true 
       });
-      this.contentLayout.add_child(titleLabel);
+
+      this._backButton = new St.Button({
+        label: '← Back',
+        style_class: 'team-selector-back-button',
+        visible: false,
+        x_align: Clutter.ActorAlign.START,
+      });
+      this._backButton.connect('clicked', () => this._goBack());
+      titleBox.add_child(this._backButton);
+
+      this._titleLabel = new St.Label({
+        text: 'Select Country',
+        style_class: 'team-selector-title',
+        x_expand: true,
+        x_align: Clutter.ActorAlign.CENTER,
+      });
+      titleBox.add_child(this._titleLabel);
+
+      // Empty spacer to balance the back button
+      const spacer = new St.Label({ text: '', x_align: Clutter.ActorAlign.END });
+      titleBox.add_child(spacer);
+
+      this.contentLayout.add_child(titleBox);
 
       // Scrollable content area
       let scrollView = new St.ScrollView({
@@ -60,29 +95,188 @@ export const TeamSelectorDialog = GObject.registerClass(
         },
       ]);
 
-      // Populate with teams
-      this._populateTeamSelector();
+      // Start with country selection
+      this._showCountries();
     }
 
-    async _populateTeamSelector(): Promise<void> {
+    private _goBack(): void {
+      if (this._viewState === ViewState.TEAMS) {
+        this._showCompetitions(this._selectedCountry!);
+      } else if (this._viewState === ViewState.COMPETITIONS) {
+        this._showCountries();
+      }
+    }
+
+    private async _showCountries(): Promise<void> {
+      this._viewState = ViewState.COUNTRIES;
+      this._titleLabel.set_text('Select Country');
+      if (this._backButton) {
+        this._backButton.visible = false;
+      }
+      this._contentBox.destroy_all_children();
+
       try {
-        this._contentBox.destroy_all_children();
-
-        // Fetch competitions from Sportradar (filtered to 4 leagues)
-        const competitions = await DataLoader.fetchCompetitions();
-
-        if (!competitions || competitions.length === 0) {
-          let noLeaguesLabel = new St.Label({
-            text: 'No competitions available. Data may still be loading.',
+        const countries = await DataLoader.fetchCountries();
+        
+        if (!countries || countries.length === 0) {
+          const noCountriesLabel = new St.Label({
+            text: 'No countries available. Please check your connection.',
             style_class: 'no-teams-label',
           });
-          this._contentBox.add_child(noLeaguesLabel);
+          this._contentBox.add_child(noCountriesLabel);
           return;
         }
 
-        // For each competition, create a league container and show a placeholder header immediately.
+        // Sort countries by name
+        countries.sort((a, b) => a.name.localeCompare(b.name));
+
+        for (const country of countries) {
+          const countryBox = new St.BoxLayout({ 
+            style_class: 'team-selector-country-row',
+            reactive: true,
+            track_hover: true,
+          });
+
+          const countryLabel = new St.Label({ 
+            text: `${country.name}${country.competitionCount ? ` (${country.competitionCount})` : ''}`,
+            style_class: 'team-selector-country-label',
+            x_expand: true,
+          });
+
+          const arrowLabel = new St.Label({
+            text: '→',
+            style_class: 'team-selector-arrow',
+          });
+
+          countryBox.add_child(countryLabel);
+          countryBox.add_child(arrowLabel);
+
+          const button = new St.Button({ 
+            child: countryBox,
+            style_class: 'team-selector-item-button',
+            x_expand: true,
+          });
+
+          button.connect('clicked', () => {
+            this._selectedCountry = country;
+            this._showCompetitions(country);
+          });
+
+          this._contentBox.add_child(button);
+        }
+      } catch (error) {
+        logErr(error, 'TeamSelector: Failed to load countries');
+        const errorLabel = new St.Label({
+          text: 'Error loading countries: ' + (error as Error).message,
+          style_class: 'no-teams-label',
+        });
+        this._contentBox.add_child(errorLabel);
+      }
+    }
+
+    private async _showCompetitions(country: Country): Promise<void> {
+      this._viewState = ViewState.COMPETITIONS;
+      this._titleLabel.set_text(`${country.name} - Select Competition`);
+      if (this._backButton) {
+        this._backButton.visible = true;
+      }
+      this._contentBox.destroy_all_children();
+
+      try {
+        const competitions = await DataLoader.fetchCompetitions(country.id);
+        
+        if (!competitions || competitions.length === 0) {
+          const noCompetitionsLabel = new St.Label({
+            text: 'No competitions available for this country.',
+            style_class: 'no-teams-label',
+          });
+          this._contentBox.add_child(noCompetitionsLabel);
+          return;
+        }
+
+        // Sort competitions by name
+        competitions.sort((a, b) => a.name.localeCompare(b.name));
+
+        for (const competition of competitions) {
+          const competitionBox = new St.BoxLayout({ 
+            style_class: 'team-selector-competition-row',
+            reactive: true,
+            track_hover: true,
+          });
+
+          const competitionLabel = new St.Label({ 
+            text: competition.name,
+            style_class: 'team-selector-competition-label',
+            x_expand: true,
+          });
+
+          const arrowLabel = new St.Label({
+            text: '→',
+            style_class: 'team-selector-arrow',
+          });
+
+          competitionBox.add_child(competitionLabel);
+          competitionBox.add_child(arrowLabel);
+
+          const button = new St.Button({ 
+            child: competitionBox,
+            style_class: 'team-selector-item-button',
+            x_expand: true,
+          });
+
+          button.connect('clicked', () => {
+            this._selectedCompetition = competition;
+            this._showTeams(competition);
+          });
+
+          this._contentBox.add_child(button);
+        }
+      } catch (error) {
+        logErr(error, 'TeamSelector: Failed to load competitions');
+        const errorLabel = new St.Label({
+          text: 'Error loading competitions: ' + (error as Error).message,
+          style_class: 'no-teams-label',
+        });
+        this._contentBox.add_child(errorLabel);
+      }
+    }
+
+  async _showTeams(competition: Competition): Promise<void> {
+      this._viewState = ViewState.TEAMS;
+      this._titleLabel.set_text(`${competition.name} - Select Teams`);
+      if (this._backButton) {
+        this._backButton.visible = true;
+      }
+      this._contentBox.destroy_all_children();
+
+      try {
+        const loadingLabel = new St.Label({
+          text: 'Loading teams...',
+          style_class: 'team-selector-loading',
+        });
+        this._contentBox.add_child(loadingLabel);
+
+        const teams = await DataLoader.fetchCompetitionInfo(competition.id);
+        
+        this._contentBox.remove_child(loadingLabel);
+
+        if (!teams || teams.length === 0) {
+          const noTeamsLabel = new St.Label({
+            text: 'No teams available for this competition.',
+            style_class: 'no-teams-label',
+          });
+          this._contentBox.add_child(noTeamsLabel);
+          return;
+        }
+
+        // Sort teams by name
+        teams.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        // Get followed teams
         const followed = this._settings.get_strv('followed-teams');
-        // determine accent color from system settings (fallback to stylesheet color)
+        this._followedCache = new Set(followed);
+
+        // Get accent color
         let accentColor = '#ffd966';
         try {
           const ifaceSettings = new Gio.Settings({ schema: 'org.gnome.desktop.interface' });
@@ -92,69 +286,13 @@ export const TeamSelectorDialog = GObject.registerClass(
           logErr(e, 'TeamSelector: Failed to get accent color from system settings');
         }
 
-        // Start all competition fetches concurrently while showing headers immediately.
-        const fetchPromises: Array<{ 
-          comp: CompetitionWithPlaceholder; 
-          leagueContainer: St.BoxLayout; 
-          statusLabel: St.Label; 
-          promise: Promise<Competitor[]> 
-        }> = [];
-
-        for (const comp of competitions) {
-          // Create a per-league container so we can display the header immediately
-          const leagueContainer = new St.BoxLayout({ style_class: 'team-selector-league-container', vertical: true });
-          const leagueLabel = new St.Label({ text: comp.name, style_class: 'team-selector-league-header', x_expand: true });
-          leagueContainer.add_child(leagueLabel);
-
-          // Add a small status placeholder which we'll replace when teams arrive
-          const statusLabel = new St.Label({ text: comp._placeholder ? 'Not cached' : 'Loading teams...', style_class: 'team-selector-league-status' });
-          leagueContainer.add_child(statusLabel);
-
-          // Add the container to the main content box so the header is visible immediately
-          this._contentBox.add_child(leagueContainer);
-
-          // Start fetch but don't await here; store the promise and associated metadata
-          fetchPromises.push({
-            comp,
-            leagueContainer,
-            statusLabel,
-            promise: DataLoader.fetchCompetitionInfo(comp.id),
-          });
-        }
-
-        // Await all fetches but handle per-request failures so one failure doesn't abort all updates
-        const settled = await Promise.allSettled(fetchPromises.map(p => p.promise));
-
-        for (let i = 0; i < fetchPromises.length; i++) {
-          const { comp, leagueContainer, statusLabel } = fetchPromises[i];
-          const result = settled[i];
-
-          if (result.status === 'fulfilled') {
-            const teams = result.value;
-            if (teams && teams.length > 0) {
-              teams.forEach((team: Competitor) => (team as CompetitorWithLeague).leagueName = comp.name);
-
-              // Sort this competition's teams by name for stable order
-              teams.sort((a: Competitor, b: Competitor) => (a.name || '').localeCompare(b.name || ''));
-
-              // Remove the status label and render this competition's teams into the league container
-              leagueContainer.remove_child(statusLabel);
-              this._renderTeamsBatchedForLeague(teams as CompetitorWithLeague[], comp.name, followed, leagueContainer, accentColor);
-            } else {
-              // Update the status label to indicate no teams are available
-              statusLabel.set_text(comp._placeholder ? 'Not cached' : 'No teams available');
-            }
-          } else {
-            // Fetch failed for this competition; log and show an error indicator in the UI
-            logErr((result as PromiseRejectedResult).reason, `TeamSelector: Failed to fetch teams for competition ${comp.id}`);
-            statusLabel.set_text('Error loading teams');
-          }
-        }
+        // Render teams with batching for performance
+        this._renderTeamsBatched(teams, accentColor);
 
       } catch (error) {
-        logErr(error, 'TeamSelector: Failed to populate team selector');
+        logErr(error, 'TeamSelector: Failed to load teams');
         this._contentBox.destroy_all_children();
-        let errorLabel = new St.Label({
+        const errorLabel = new St.Label({
           text: 'Error loading teams: ' + (error as Error).message,
           style_class: 'no-teams-label',
         });
@@ -162,35 +300,29 @@ export const TeamSelectorDialog = GObject.registerClass(
       }
     }
 
-    _renderTeamsBatched(allTeams: CompetitorWithLeague[], followedTeams: string[] | undefined, accentColor: string) {
+    private _renderTeamsBatched(teams: Competitor[], accentColor: string): void {
+      this._allTeams = teams as CompetitorWithLeague[];
       this._batchIndex = 0;
-      this._allTeams = allTeams;
-      this._followedCache = new Set(followedTeams || []);
-      this._currentLeague = null;
-
-      const batchSize = 20; // tuneable
+      const batchSize = 20;
 
       const processBatch = () => {
         let processed = 0;
         while (this._batchIndex < this._allTeams.length && processed < batchSize) {
           const team = this._allTeams[this._batchIndex];
-
-          // Add league header if needed
-          if (this._currentLeague !== team.leagueName) {
-              this._currentLeague = team.leagueName ?? null;
-            let leagueLabel = new St.Label({
-              text: team.leagueName,
-              style_class: 'team-selector-league-header',
-              x_expand: true,
-            });
-            this._contentBox.add_child(leagueLabel);
-          }
-
-          let teamBox = new St.BoxLayout({ style_class: 'team-selector-team-row', vertical: false });
-          let teamLabel = new St.Label({ text: team.name, style_class: 'team-selector-team-label', x_expand: true });
           const teamId = String(team.id);
-          const isFollowed = this._followedCache ? this._followedCache.has(teamId) : false;
-          // apply followed styling if currently followed
+          const isFollowed = this._followedCache.has(teamId);
+
+          const teamBox = new St.BoxLayout({ 
+            style_class: 'team-selector-team-row',
+            vertical: false,
+          });
+
+          const teamLabel = new St.Label({ 
+            text: team.name,
+            style_class: 'team-selector-team-label',
+            x_expand: true,
+          });
+
           if (isFollowed) {
             teamLabel.add_style_class_name('team--followed');
             if (accentColor) {
@@ -207,7 +339,7 @@ export const TeamSelectorDialog = GObject.registerClass(
             }
           }
 
-          let teamSwitch = new St.Button({
+          const teamSwitch = new St.Button({
             style_class: isFollowed ? 'team-selector-switch team-selector-switch-active' : 'team-selector-switch',
             label: isFollowed ? '✓' : '',
             x_align: Clutter.ActorAlign.END,
@@ -217,16 +349,20 @@ export const TeamSelectorDialog = GObject.registerClass(
             let currentFollowed = this._settings.get_strv('followed-teams');
             const index = currentFollowed.indexOf(teamId);
             if (index >= 0) {
+              // Unfollow
               currentFollowed.splice(index, 1);
               teamSwitch.remove_style_class_name('team-selector-switch-active');
               teamSwitch.set_label('');
+              this._followedCache.delete(teamId);
               teamLabel.remove_style_class_name('team--followed');
               try { teamLabel.set_style(''); } catch (e) { logErr(e, 'Failed to reset style for teamLabel'); }
               try { teamBox.remove_style_class_name('team--followed'); } catch (e) { logErr(e, 'Failed to remove style class from teamBox'); }
             } else {
+              // Follow
               currentFollowed.push(teamId);
               teamSwitch.add_style_class_name('team-selector-switch-active');
               teamSwitch.set_label('✓');
+              this._followedCache.add(teamId);
               teamLabel.add_style_class_name('team--followed');
               try {
                 if (accentColor) teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
@@ -252,102 +388,7 @@ export const TeamSelectorDialog = GObject.registerClass(
         }
       };
 
-      // Kick off first batch
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
-        processBatch();
-        return GLib.SOURCE_REMOVE;
-      });
-    }
-
-    _renderTeamsBatchedForLeague(teams: CompetitorWithLeague[], leagueName: string, followedTeams: string[] | undefined, container: St.BoxLayout | null, accentColor: string) {
-      let batchIndex = 0;
-      const batchSize = 12; // per-league batch size
-      const followedCache = new Set(followedTeams || []);
-
-      // If a container was provided (created by _populateTeamSelector), use it; otherwise create one and add a header
-      let leagueContainer = container;
-      if (!leagueContainer) {
-        leagueContainer = new St.BoxLayout({ style_class: 'team-selector-league-container', vertical: true });
-        const leagueLabel = new St.Label({ text: leagueName, style_class: 'team-selector-league-header', x_expand: true });
-        leagueContainer.add_child(leagueLabel);
-        this._contentBox.add_child(leagueContainer);
-      }
-
-      const processBatch = () => {
-        let processed = 0;
-        while (batchIndex < teams.length && processed < batchSize) {
-          const team = teams[batchIndex];
-
-          let teamBox = new St.BoxLayout({ style_class: 'team-selector-team-row', vertical: false });
-          let teamLabel = new St.Label({ text: team.name, style_class: 'team-selector-team-label', x_expand: true });
-
-          const teamId = String(team.id);
-          const isFollowed = followedCache.has(teamId);
-          // apply followed styling if currently followed
-          if (isFollowed) {
-            teamLabel.add_style_class_name('team--followed');
-            if (accentColor) {
-              try {
-                teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
-              } catch (e) {
-                logErr(e, 'Failed to set style for teamLabel');
-              }
-            }
-            try {
-              teamBox.add_style_class_name('team--followed');
-            } catch (e) {
-              logErr(e, 'Failed to add style class to teamBox');
-            }
-          }
-
-          let teamSwitch = new St.Button({
-            style_class: isFollowed ? 'team-selector-switch team-selector-switch-active' : 'team-selector-switch',
-            label: isFollowed ? '✓' : '',
-            x_align: Clutter.ActorAlign.END,
-          });
-
-          teamSwitch.connect('clicked', () => {
-            let currentFollowed = this._settings.get_strv('followed-teams');
-            const index = currentFollowed.indexOf(teamId);
-            if (index >= 0) {
-              currentFollowed.splice(index, 1);
-              teamSwitch.remove_style_class_name('team-selector-switch-active');
-              teamSwitch.set_label('');
-              followedCache.delete(teamId);
-              teamLabel.remove_style_class_name('team--followed');
-              try { teamLabel.set_style(''); } catch (e) { logErr(e, 'Failed to reset style for teamLabel'); }
-              try { teamBox.remove_style_class_name('team--followed'); } catch (e) { logErr(e, 'Failed to remove style class from teamBox'); }
-            } else {
-              currentFollowed.push(teamId);
-              teamSwitch.add_style_class_name('team-selector-switch-active');
-              teamSwitch.set_label('✓');
-              followedCache.add(teamId);
-              teamLabel.add_style_class_name('team--followed');
-              try {
-                if (accentColor) teamLabel.set_style(`color: ${accentColor}; font-weight: 800;`);
-              } catch (e) { logErr(e, 'Failed to set style for teamLabel'); }
-              try { teamBox.add_style_class_name('team--followed'); } catch (e) { logErr(e, 'Failed to add style class to teamBox'); }
-            }
-            this._settings.set_strv('followed-teams', currentFollowed);
-          });
-
-          teamBox.add_child(teamLabel);
-          teamBox.add_child(teamSwitch);
-          leagueContainer.add_child(teamBox);
-
-          batchIndex++;
-          processed++;
-        }
-
-        if (batchIndex < teams.length) {
-          GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
-            processBatch();
-            return GLib.SOURCE_REMOVE;
-          });
-        }
-      };
-
-      // Kick off first per-league batch
+      // Start first batch
       GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 10, () => {
         processBatch();
         return GLib.SOURCE_REMOVE;

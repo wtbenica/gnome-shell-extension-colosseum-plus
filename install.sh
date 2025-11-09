@@ -6,9 +6,9 @@ yarn build
 
 # Create zip file from dist
 cd dist
-zip -r ../colosseum.zip .
+zip -r ../arena.zip .
 
 # Install the extension
-gnome-extensions install --force ../colosseum.zip
+gnome-extensions install --force ../arena.zip
 
 echo "Extension installed successfully!"

@@ -9,7 +9,7 @@ import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import * as CONSTANTS from "../config/const.js";
-import type { ColosseumConstants, Settings } from "../config/types.js";
+import type { ArenaConstants, Settings } from "../config/types.js";
 
 import ColosseumClient from "../api/colosseum_client.js";
 import { GameLink } from "./game_link.js";
@@ -31,18 +31,18 @@ interface ExtendedGame extends Game {
 }
 
 /**
- * Main panel menu class for the Colosseum extension.
+ * Main panel menu class for the Arena extension.
  * Manages the top bar icon, menu display, and data updates.
  */
-export const ColosseumPanelMenu = GObject.registerClass(
-  { GTypeName: "ColosseumPanelMenu" },
-  class ColosseumPanelMenu extends PanelMenu.Button {
+export const ArenaPanelMenu = GObject.registerClass(
+  { GTypeName: "ArenaPanelMenu" },
+  class ArenaPanelMenu extends PanelMenu.Button {
     private _scores!: League[];
     private _nextGames!: League[];
     private _nextGamesMissingApiKey!: boolean;
     private _timeout!: number | null;
     private _settings!: Settings | Gio.Settings | null;
-    private _constants!: ColosseumConstants;
+    private _constants!: ArenaConstants;
     private _scheduleCache!: Map<string, Game[]>;
     private _panelBoxLayout!: St.BoxLayout;
     private _icon!: St.Icon;
@@ -65,14 +65,13 @@ export const ColosseumPanelMenu = GObject.registerClass(
         track_hover: false,
       });
 
-      this._icon = new St.Icon({
-        gicon: Gio.icon_new_for_string(
-          EXT_PATH.replace("widgets/panel_menu.js", "icon/colosseum-symbolic.svg")
-        ),
-        icon_size: 24,
-      });
-
-      this._menuText = new St.Label({
+        this._icon = new St.Icon({
+          gicon: Gio.icon_new_for_string(
+          EXT_PATH.replace("widgets/panel_menu.js", "icon/arena-symbolic.svg")
+            .replace("file://", "")
+          ),
+          style_class: "system-status-icon",
+        });      this._menuText = new St.Label({
         text: "",
         y_align: Clutter.ActorAlign.CENTER,
       });
@@ -89,7 +88,7 @@ export const ColosseumPanelMenu = GObject.registerClass(
      * @param settings - GSettings instance for the extension
      * @param constants - Constants object containing preference keys
      */
-    setSettings(settings: Settings | Gio.Settings, constants: ColosseumConstants): void {
+    setSettings(settings: Settings | Gio.Settings, constants: ArenaConstants): void {
       this._settings = settings;
       this._constants = constants;
 
@@ -734,3 +733,6 @@ export const ColosseumPanelMenu = GObject.registerClass(
     }
   }
 );
+
+// Backwards compatibility export
+export const ColosseumPanelMenu = ArenaPanelMenu;

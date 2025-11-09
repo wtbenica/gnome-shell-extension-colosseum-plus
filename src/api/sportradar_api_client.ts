@@ -16,8 +16,8 @@ import type {
 import type { SportEventBasic } from "../api/types.js";
 import { isCompetitionArray, isCompetitorArray, isSportEventBasicArray } from "../api/typeguards.js";
 
-const SCHEMA_ID = "org.gnome.shell.extensions.colosseum";
-const API_CACHE_PATH = GLib.build_filenamev([GLib.get_user_cache_dir(), 'colosseum-api']);
+const SCHEMA_ID = "org.gnome.shell.extensions.arena";
+const API_CACHE_PATH = GLib.build_filenamev([GLib.get_user_cache_dir(), 'arena-api']);
 
 /**
  * Sportradar API client for soccer data

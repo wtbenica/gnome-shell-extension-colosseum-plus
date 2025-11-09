@@ -1,8 +1,8 @@
 /**
- * Configuration constants for the Colosseum extension.
+ * Configuration constants for the Arena extension.
  * These can be static (compile-time) or dynamic (loaded from API).
  */
-export interface ColosseumConstants {
+export interface ArenaConstants {
   // Static preference keys
   PREF_UPDATE_FREQ: string;
   PREF_FOLLOWED_ONLY: string;
@@ -16,6 +16,9 @@ export interface ColosseumConstants {
   DISPLAY_NAME: Record<string, string>;
   SPORTS: Record<string, Array<{ id: string; name: string; pref: string }>>;
 }
+
+// Keep old name for backwards compatibility
+export type ColosseumConstants = ArenaConstants;
 
 /**
  * GSettings interface for GNOME Shell extensions

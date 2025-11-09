@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <schemalist>
-    <schema id="org.gnome.shell.extensions.colosseum" path="/org/gnome/shell/extensions/colosseum/">
+    <schema id="org.gnome.shell.extensions.arena" path="/org/gnome/shell/extensions/arena/">
         <key name="update-frequency" type="i">
             <default>5</default>
             <summary>Live score update frequency</summary>
@@ -113,6 +113,10 @@
         <key name="followed-teams" type="as">
             <default>[]</default>
             <summary>Array of followed team IDs</summary>
+        </key>
+        <key name="selected-country" type="s">
+            <default>''</default>
+            <summary>Selected country code for filtering competitions</summary>
         </key>
     </schema>
 </schemalist>

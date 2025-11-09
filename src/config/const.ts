@@ -1,11 +1,11 @@
 import DataLoader from "../data/data_loader.js";
 import { logErr } from "../utils/logging.js";
-import type { ColosseumConstants } from "./types.js";
+import type { ArenaConstants } from "./types.js";
 
-let constantsPromise: Promise<ColosseumConstants> | null = null;
-let loadedConstants: ColosseumConstants | null = null;
+let constantsPromise: Promise<ArenaConstants> | null = null;
+let loadedConstants: ArenaConstants | null = null;
 
-export async function getConstants(): Promise<ColosseumConstants> {
+export async function getConstants(): Promise<ArenaConstants> {
   if (!constantsPromise) {
     constantsPromise = DataLoader.getDynamicConstants();
   }
@@ -19,6 +19,7 @@ export const PREF_FOLLOWED_ONLY: string = "followed-only";
 export const PREF_COMPACT_MODE: string = "compact-mode";
 export const PREF_POSITION_TOPBAR: string = "position-in-topbar";
 export const PREF_SHOW_NEXT_GAMES: string = "show-next-games";
+export const PREF_SELECTED_COUNTRY: string = "selected-country";
 
 // Dynamic constants - will be populated after getConstants() is called
 export let PREF_LEAGUES: Record<string, string> = {
